@@ -741,9 +741,26 @@ function exportGame() {
 
 function openGenerateLevel() {
   const level = getSelectedLevel();
+  if (generationPanelOpen && level.generation.userRequest.trim()) {
+    generateDraftFromRequest();
+    return;
+  }
+
   generationPanelOpen = true;
   render();
-  showStatus(`Generation process opened for ${level.name}`);
+  focusGenerationInput();
+  showStatus(`Type a short level request, then Generate Draft`);
+}
+
+function focusGenerationInput() {
+  requestAnimationFrame(() => {
+    const inspector = document.querySelector('.inspector');
+    const section = document.getElementById('levelGeneration');
+    const input = document.getElementById('generationUserRequestInput');
+    if (inspector) inspector.scrollTop = 0;
+    if (section) section.scrollTop = 0;
+    if (input) input.focus();
+  });
 }
 
 function generateDraftFromRequest() {
