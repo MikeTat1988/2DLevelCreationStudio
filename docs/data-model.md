@@ -100,13 +100,17 @@ Each level has a `generation` object. It describes the art-generation workflow a
 {
   "generation": {
     "step": 1,
+    "userRequest": "generate me a level that is a prison cell",
     "summary": "Short level idea",
     "composition": "Layer plan and separation notes",
     "gameplayPurpose": "What puzzle logic the room supports",
     "safetyCheck": "Child-safe constraints",
     "fullLevelPrompt": "Prompt for the composed level image",
     "extractionNotes": "How to create clean cutouts",
-    "testPrompt": "First prompt to paste into an image/Codex workflow",
+    "testPrompt": "Internal model brief, normally hidden from the user",
+    "draftPlan": null,
+    "approvedPlan": null,
+    "generatedImageRef": null,
     "assetSlots": []
   }
 }
@@ -114,11 +118,12 @@ Each level has a `generation` object. It describes the art-generation workflow a
 
 Recommended generation order:
 
-1. Generate a full composed level preview.
-2. Decide which elements are permanent background and which are gameplay assets.
-3. Generate a clean background plate.
-4. Generate or extract transparent PNG cutouts for movable/interactive assets.
-5. Bind asset slots to `logicScript` rules and mechanics.
+1. User writes a short request, such as `generate me a level that is a prison cell`.
+2. The studio builds an internal model brief using app context, child-safe rules, layer rules, output dimensions, and gameplay expectations.
+3. The model generates the image and the draft structured level plan at the same time.
+4. User approves or rejects the combined image plus plan.
+5. On approval, `approvedPlan`, `assetSlots`, layer tree objects, and `logicScript` become the next-step source of truth.
+6. Cutout/background-removal generation uses the approved asset slots, not a fresh image-analysis pass.
 
 ## Asset Slots
 

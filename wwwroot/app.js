@@ -240,6 +240,7 @@ function createLevel(index) {
     },
     generation: {
       step: 1,
+      userRequest: '',
       summary: '',
       composition: '',
       gameplayPurpose: '',
@@ -247,6 +248,9 @@ function createLevel(index) {
       fullLevelPrompt: '',
       pipeline: structuredClone(generationPipelineTemplate),
       assetSlots: [],
+      draftPlan: null,
+      approvedPlan: null,
+      generatedImageRef: null,
       extractionNotes: '',
       testPrompt: ''
     },
@@ -442,23 +446,27 @@ function renderInspector() {
       <button type="button" class="section-disclosure" data-toggle="levelGeneration">Generation Process</button>
       <div id="levelGeneration" class="section-body${generationPanelOpen ? '' : ' collapsed'}">
         <div class="generation-actions">
-          <button type="button" id="seedCellRoomButton">Seed Cell Room Workflow</button>
-          <button type="button" id="copyTestPromptButton">Copy Test Prompt</button>
+          <button type="button" id="generateFromRequestButton">Generate Draft</button>
+          <button type="button" id="approveGeneratedPlanButton">Approve And Build Tree</button>
+        </div>
+        <div class="field">
+          <label for="generationUserRequestInput">What should this level be?</label>
+          <textarea id="generationUserRequestInput" placeholder="generate me a level that is a prison cell">${escapeHtml(level.generation.userRequest)}</textarea>
         </div>
         <div class="generation-steps">
           <article class="generation-step">
-            <strong>1. Concept</strong>
-            <p>Generate one full composed room image for composition, lighting, style, and puzzle readability.</p>
+            <strong>1. Draft Image + Plan</strong>
+            <p>User gives one short request. The studio adds app context, so the model plans objects and layers while generating.</p>
             <textarea id="generationSummaryInput" placeholder="Short level summary">${escapeHtml(level.generation.summary)}</textarea>
           </article>
           <article class="generation-step">
-            <strong>2. Layer Plan</strong>
-            <p>Assign each element to background, background objects, player space, or foreground. Decide what is baked vs movable.</p>
+            <strong>2. User Approval</strong>
+            <p>The generated image and its planned object data are reviewed together. No image re-analysis should be needed.</p>
             <textarea id="generationCompositionInput" placeholder="Layer separation notes">${escapeHtml(level.generation.composition)}</textarea>
           </article>
           <article class="generation-step">
-            <strong>3. Asset Slots</strong>
-            <p>Request transparent PNG cutouts and bg removal for movable/interactive objects.</p>
+            <strong>3. Build Editable Level</strong>
+            <p>After approval, the planned layers/assets populate the level tree and can be edited individually.</p>
             <textarea id="generationPromptInput" placeholder="Full level prompt">${escapeHtml(level.generation.fullLevelPrompt)}</textarea>
           </article>
         </div>
@@ -483,10 +491,12 @@ function renderInspector() {
             </ul>
           </div>
         </div>
+        <h3>Generated Draft Plan</h3>
+        <div id="draftPlanPreview" class="draft-plan-preview"></div>
         <h3>Planned Asset Slots</h3>
         <div id="assetSlotList" class="asset-slot-list"></div>
-        <h3>Test Prompt</h3>
-        <textarea id="testPromptInput" class="prompt-editor" placeholder="Prompt for first generation pass">${escapeHtml(level.generation.testPrompt)}</textarea>
+        <h3>Internal Model Brief</h3>
+        <textarea id="testPromptInput" class="prompt-editor" placeholder="Internal prompt shown for debugging">${escapeHtml(level.generation.testPrompt)}</textarea>
       </div>
     </section>
 
@@ -531,7 +541,29 @@ function renderInspector() {
 
   renderLevelTree(level);
   renderAssetSlots(level);
+  renderDraftPlan(level);
   bindInspectorControls(level);
+}
+
+function renderDraftPlan(level) {
+  const root = document.getElementById('draftPlanPreview');
+  const plan = level.generation.draftPlan;
+  if (!plan) {
+    root.innerHTML = '<div class="layer-empty">No draft yet. Type a short request and click Generate Draft.</div>';
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="draft-plan-card">
+      <strong>${escapeHtml(plan.title)}</strong>
+      <p>${escapeHtml(plan.intent)}</p>
+      <div class="summary-list">
+        <div class="summary-row"><strong>Background</strong><span>${plan.backgroundItems.length}</span></div>
+        <div class="summary-row"><strong>Movable</strong><span>${plan.movableItems.length}</span></div>
+        <div class="summary-row"><strong>Logic rules</strong><span>${plan.logicRules.length}</span></div>
+      </div>
+    </div>
+  `;
 }
 
 function renderAssetSlots(level) {
@@ -563,7 +595,9 @@ function renderLevelTree(level) {
     const layerNode = document.createElement('div');
     layerNode.className = 'layer-node';
     const objects = level.objects.filter((object) => object.layerId === layer.id);
-    const plannedSlots = (level.generation.assetSlots ?? []).filter((slot) => slot.layerId === layer.id);
+    const plannedSlots = level.generation.approvedPlan
+      ? []
+      : (level.generation.assetSlots ?? []).filter((slot) => slot.layerId === layer.id);
     const characters = project.characters.filter((character) => character.levelId === level.id && character.layerId === layer.id);
     layerNode.innerHTML = `
       <div class="layer-row">
@@ -609,8 +643,12 @@ function bindInspectorControls(level) {
   });
 
   document.getElementById('generateLevelPanelButton').addEventListener('click', openGenerateLevel);
-  document.getElementById('seedCellRoomButton').addEventListener('click', seedCellRoomWorkflow);
-  document.getElementById('copyTestPromptButton').addEventListener('click', copyTestPrompt);
+  document.getElementById('generateFromRequestButton').addEventListener('click', generateDraftFromRequest);
+  document.getElementById('approveGeneratedPlanButton').addEventListener('click', approveGeneratedPlan);
+  document.getElementById('generationUserRequestInput').addEventListener('input', (event) => {
+    level.generation.userRequest = event.target.value;
+    saveProject();
+  });
   document.getElementById('generationSummaryInput').addEventListener('input', (event) => {
     level.generation.summary = event.target.value;
     saveProject();
@@ -706,6 +744,213 @@ function openGenerateLevel() {
   generationPanelOpen = true;
   render();
   showStatus(`Generation process opened for ${level.name}`);
+}
+
+function generateDraftFromRequest() {
+  const level = getSelectedLevel();
+  const request = (level.generation.userRequest || 'generate me a level that is a prison cell').trim();
+  const isPrisonCell = /prison|cell|jail|locked/i.test(request);
+  const plan = isPrisonCell ? buildPrisonCellPlan(request) : buildGenericRoomPlan(request);
+
+  level.generation.draftPlan = plan;
+  level.generation.summary = plan.intent;
+  level.generation.composition = plan.layerPlanText;
+  level.generation.gameplayPurpose = plan.gameplayPurpose;
+  level.generation.safetyCheck = plan.safetyCheck;
+  level.generation.fullLevelPrompt = plan.internalBrief;
+  level.generation.testPrompt = plan.internalBrief;
+  level.generation.assetSlots = plan.assetSlots;
+  level.logicScript = plan.logicScript;
+  level.generation.generatedImageRef = {
+    status: 'draft_planned',
+    note: 'In the real bridge, this is where the generated image asset reference will be stored together with the plan.'
+  };
+  saveProject();
+  generationPanelOpen = true;
+  render();
+  showStatus('Draft image plan generated from short request');
+}
+
+function approveGeneratedPlan() {
+  const level = getSelectedLevel();
+  if (!level.generation.draftPlan) {
+    showStatus('Generate a draft first');
+    return;
+  }
+
+  level.generation.approvedPlan = structuredClone(level.generation.draftPlan);
+  level.generation.assetSlots = structuredClone(level.generation.draftPlan.assetSlots);
+  level.objects = level.generation.assetSlots.map((slot, index) => ({
+    id: slot.objectId,
+    name: slot.name,
+    layerId: slot.layerId,
+    position: slot.position,
+    size: slot.size,
+    interactive: slot.interactive,
+    exportSeparately: slot.needsBgRemoval,
+    movable: slot.movable,
+    occludesPlayer: slot.occludesPlayer ?? 'none',
+    assetRef: slot.id,
+    notes: slot.logicRole
+  }));
+  saveProject();
+  render();
+  showStatus('Approved plan applied to level tree');
+}
+
+function buildPrisonCellPlan(request) {
+  const assetSlots = cellRoomAssetSlots.map((slot, index) => ({
+    ...structuredClone(slot),
+    objectId: slot.id.replace('asset_', 'obj_'),
+    interactive: slot.kind !== 'background',
+    position: suggestedPositionForSlot(slot.id, index),
+    size: suggestedSizeForSlot(slot.id),
+    occludesPlayer: slot.layerId.startsWith('foreground') ? 'body' : 'none'
+  }));
+
+  const internalBrief = buildInternalBrief({
+    request,
+    title: 'Cozy Puzzle Prison Cell',
+    style: 'warm hand-painted child-safe 2D adventure game room',
+    mustPlan: assetSlots
+  });
+
+  return {
+    title: 'Cozy Puzzle Prison Cell',
+    intent: 'A friendly prison-cell puzzle room where Tom finds a hidden key and opens the locked door.',
+    gameplayPurpose: 'Move a cover object, collect a key, try one wrong item, unlock the door, then exit.',
+    safetyCheck: 'Friendly puzzle-room mood only. No horror, gore, realistic violence, weapons, drugs, alcohol, or adult themes.',
+    backgroundItems: ['stone frame', 'plaster wall', 'green lower wall', 'tiled floor', 'blue locked door', 'barred window', 'lamp light cone'],
+    movableItems: assetSlots.filter((slot) => slot.movable).map((slot) => slot.name),
+    logicRules: [
+      'pillow_moved reveals small brass key',
+      'small brass key can be collected',
+      'small brass key unlocks blue door',
+      'broom on lock fails with gentle feedback'
+    ],
+    layerPlanText: [
+      'Background: room shell, stone frame, wall, floor, door, window, pipes, lighting.',
+      'Background Objects: shelves, books, wall drawings, door lock plate.',
+      'Player Space: bed and broom approach zones.',
+      'Foreground 1: pillow, key, crate, bucket, rug, table props.',
+      'Foreground 2: optional front frame/occluders.'
+    ].join('\n'),
+    internalBrief,
+    assetSlots,
+    logicScript: cellRoomLogicScript
+  };
+}
+
+function buildGenericRoomPlan(request) {
+  const safeName = request.replace(/^generate me a level that is\s+/i, '').trim() || 'adventure room';
+  const assetSlots = [
+    {
+      id: 'asset_background_room',
+      objectId: 'obj_background_room',
+      name: `${safeName} background`,
+      layerId: 'background',
+      kind: 'background',
+      movable: false,
+      interactive: false,
+      needsBgRemoval: false,
+      source: 'full_level_generation',
+      logicRole: 'permanent room plate',
+      position: { x: 768, y: 432 },
+      size: { width: 1536, height: 864 }
+    },
+    {
+      id: 'asset_primary_interactive_prop',
+      objectId: 'obj_primary_interactive_prop',
+      name: 'primary interactive prop',
+      layerId: 'foreground_1',
+      kind: 'movable_prop',
+      movable: true,
+      interactive: true,
+      needsBgRemoval: true,
+      source: 'separate_cutout_generation',
+      logicRole: 'first puzzle interaction',
+      position: { x: 660, y: 610 },
+      size: { width: 180, height: 120 }
+    }
+  ];
+
+  const internalBrief = buildInternalBrief({
+    request,
+    title: safeName,
+    style: 'child-safe 2D adventure game level',
+    mustPlan: assetSlots
+  });
+
+  return {
+    title: safeName,
+    intent: `A child-safe adventure level based on: ${request}`,
+    gameplayPurpose: 'Create a readable room with at least one interaction, one collectible or clue, and one exit.',
+    safetyCheck: 'No horror, gore, realistic violence, weapons, drugs, alcohol, or adult themes.',
+    backgroundItems: ['room shell', 'walkable floor', 'exit area'],
+    movableItems: ['primary interactive prop'],
+    logicRules: ['interactive prop changes level state', 'success enables exit'],
+    layerPlanText: 'Background: permanent room plate.\nForeground 1: movable interactive props.\nPlayer Space: walkable area and character approach zones.',
+    internalBrief,
+    assetSlots,
+    logicScript: 'Goal: Solve the room puzzle and reach the exit.\nRules:\n- Interact with the primary prop.\n- Collect or reveal the needed clue.\n- Use the clue to activate the exit.'
+  };
+}
+
+function buildInternalBrief({ request, title, style, mustPlan }) {
+  return [
+    `User request: "${request}"`,
+    '',
+    `Generate: ${title}`,
+    `Style: ${style}.`,
+    '',
+    'Built-in app context:',
+    '- This is a 2D kids adventure level authoring tool.',
+    '- Generate the image and the structured level plan at the same time.',
+    '- Do not require a later image-analysis pass to discover objects.',
+    '- Keep all movable/interactive elements visually separable from the background.',
+    '- Target canvas: 1536x864, 16:9 side-view room.',
+    '- Output must be child-safe and readable for point-and-click gameplay.',
+    '',
+    'Return together with the generated image:',
+    '- background plate description',
+    '- layer assignment for each object',
+    '- planned asset slots',
+    '- movable/cutout flag',
+    '- bg-removal needed flag',
+    '- rough bounding boxes in 1536x864 coordinates',
+    '- gameplay role and logic binding',
+    '',
+    'Planned asset slots:',
+    ...mustPlan.map((slot) => `- ${slot.name}: layer=${slot.layerId}, movable=${slot.movable}, bgRemoval=${slot.needsBgRemoval}, role=${slot.logicRole}`)
+  ].join('\n');
+}
+
+function suggestedPositionForSlot(id, index) {
+  const positions = {
+    asset_background_room: { x: 768, y: 432 },
+    asset_bed: { x: 1040, y: 640 },
+    asset_pillow: { x: 1180, y: 590 },
+    asset_small_key: { x: 1160, y: 630 },
+    asset_door_lock: { x: 210, y: 520 },
+    asset_crate: { x: 330, y: 720 },
+    asset_broom: { x: 620, y: 620 },
+    asset_shelf_books: { x: 860, y: 315 }
+  };
+  return positions[id] ?? { x: 240 + index * 120, y: 600 };
+}
+
+function suggestedSizeForSlot(id) {
+  const sizes = {
+    asset_background_room: { width: 1536, height: 864 },
+    asset_bed: { width: 520, height: 230 },
+    asset_pillow: { width: 170, height: 70 },
+    asset_small_key: { width: 46, height: 22 },
+    asset_door_lock: { width: 72, height: 130 },
+    asset_crate: { width: 210, height: 150 },
+    asset_broom: { width: 80, height: 270 },
+    asset_shelf_books: { width: 430, height: 130 }
+  };
+  return sizes[id] ?? { width: 160, height: 100 };
 }
 
 function seedCellRoomWorkflow() {

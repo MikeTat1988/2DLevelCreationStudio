@@ -27,11 +27,18 @@
       },
       "generation": {
         "step": 1,
+        "userRequest": "",
         "summary": "",
         "composition": "",
         "gameplayPurpose": "",
         "safetyCheck": "",
-        "fullLevelPrompt": ""
+        "fullLevelPrompt": "",
+        "assetSlots": [],
+        "draftPlan": null,
+        "approvedPlan": null,
+        "generatedImageRef": null,
+        "extractionNotes": "",
+        "testPrompt": ""
       },
       "logicScript": "Goal: Character reaches the exit after solving the level.\nRules:\n- Character must find item_y before object_n can open.\n- Character can try item_j on object_k, but it should fail with a child-safe feedback line.\n- Successful actions should update inventory or level state explicitly.",
       "layers": [
