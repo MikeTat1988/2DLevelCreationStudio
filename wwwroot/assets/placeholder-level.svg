@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1536 864" role="img" aria-labelledby="title desc">
+  <title id="title">Placeholder level background</title>
+  <desc id="desc">A simple child-safe adventure scene placeholder.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#cfefff"/>
+      <stop offset="1" stop-color="#f9f2d8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1536" height="864" fill="url(#sky)"/>
+  <rect y="612" width="1536" height="252" fill="#7dbf7a"/>
+  <path d="M0 620 C200 560 300 650 470 590 C650 530 770 640 940 585 C1120 525 1280 620 1536 560 L1536 864 L0 864 Z" fill="#61a766" opacity=".8"/>
+  <rect x="205" y="430" width="260" height="182" rx="10" fill="#f7c873"/>
+  <rect x="250" y="475" width="58" height="74" rx="8" fill="#7eb6dc"/>
+  <rect x="340" y="495" width="64" height="117" rx="6" fill="#926b4d"/>
+  <path d="M178 432 L335 292 L492 432 Z" fill="#de735a"/>
+  <circle cx="1245" cy="282" r="76" fill="#ffd76d"/>
+  <path d="M1050 616 C1105 548 1188 552 1232 616 Z" fill="#5f8f5e"/>
+  <text x="768" y="118" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" fill="#2f4550">Level Placeholder</text>
+</svg>
+

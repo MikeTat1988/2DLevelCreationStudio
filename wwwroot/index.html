@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>2D Level Creation Studio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">2D</span>
+        <div>
+          <h1>Level Creation Studio</h1>
+          <p id="projectSubtitle">Local adventure project</p>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button id="startGameButton" type="button">Start Game</button>
+        <button id="addLevelButton" type="button">Add Level</button>
+        <button id="generateLevelButton" type="button" class="primary-action">Generate Level</button>
+        <button id="exportGameButton" type="button">ExportGame</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="tree-panel" aria-label="Game tree">
+        <section class="panel-header">
+          <h2>Game Tree</h2>
+          <p id="projectTitleLabel"></p>
+        </section>
+        <nav id="gameTree" class="game-tree"></nav>
+      </aside>
+
+      <section class="viewer-panel" aria-label="Level viewer">
+        <div class="viewer-header">
+          <div>
+            <label class="level-select-label" for="levelSelect">Current level</label>
+            <select id="levelSelect" class="level-select"></select>
+            <p id="levelMeta">1536 x 864 canvas</p>
+          </div>
+          <span id="statusPill" class="status-pill">Authoring</span>
+        </div>
+        <div class="level-stage-wrap">
+          <div id="levelStage" class="level-stage">
+            <img class="level-placeholder" src="assets/placeholder-level.svg" alt="">
+            <div id="levelEmptyState" class="level-empty-state">Ready for objects, layers, and mechanics</div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="inspector-panel" aria-label="Inspector">
+        <section class="panel-header">
+          <h2>Inspector</h2>
+          <p>Level tree, generation, and project data</p>
+        </section>
+        <div id="inspector" class="inspector"></div>
+      </aside>
+    </main>
+  </div>
+
+  <input id="characterImportInput" type="file" accept="application/json,.json" hidden>
+
+  <div id="renameDialog" class="dialog-backdrop" hidden>
+    <form id="renameForm" class="dialog" method="dialog">
+      <h2>Rename level</h2>
+      <p id="renameLevelId"></p>
+      <input id="renameLevelInput" autocomplete="off">
+      <div class="dialog-actions">
+        <button type="button" id="cancelRenameButton">Cancel</button>
+        <button type="submit" class="primary-action">Save</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="app.js?v=20260502-fixed-viewport"></script>
+</body>
+</html>

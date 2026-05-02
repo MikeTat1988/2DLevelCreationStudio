@@ -1,0 +1,21 @@
+.DS_Store
+Thumbs.db
+
+# Local/editor state
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local dependency/cache/build folders for future iterations
+node_modules/
+dist/
+build/
+.worktrees/
+worktrees/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+

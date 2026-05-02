@@ -1,0 +1,8 @@
+{
+  "id": "2d-level-creation-studio",
+  "name": "2D Level Creation Studio",
+  "version": "0.1.0",
+  "entry": "wwwroot/index.html",
+  "description": "Local static studio for authoring structured 2D kids adventure game projects."
+}
+

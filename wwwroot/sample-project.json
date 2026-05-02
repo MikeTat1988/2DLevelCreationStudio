@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "game": {
+    "id": "new-game",
+    "title": "New Kids Adventure",
+    "startLevelId": "level_1",
+    "notes": ""
+  },
+  "characters": [],
+  "inventory": [],
+  "mechanicsLibrary": [],
+  "levels": [
+    {
+      "id": "level_1",
+      "name": "Level 1",
+      "canvas": { "width": 1536, "height": 864, "aspect": "16:9" },
+      "phaseStatus": {
+        "conceptApproved": false,
+        "layersApproved": false,
+        "assetsApproved": false,
+        "mechanicsApproved": false
+      },
+      "prompts": {
+        "concept": "",
+        "fullLevelImage": "",
+        "layerSeparation": ""
+      },
+      "generation": {
+        "step": 1,
+        "summary": "",
+        "composition": "",
+        "gameplayPurpose": "",
+        "safetyCheck": "",
+        "fullLevelPrompt": ""
+      },
+      "logicScript": "Goal: Character reaches the exit after solving the level.\nRules:\n- Character must find item_y before object_n can open.\n- Character can try item_j on object_k, but it should fail with a child-safe feedback line.\n- Successful actions should update inventory or level state explicitly.",
+      "layers": [
+        { "id": "background", "name": "Background", "order": 0, "visible": true },
+        { "id": "background_objects", "name": "Background Objects", "order": 1, "visible": true },
+        { "id": "player", "name": "Player Space", "order": 2, "visible": true },
+        { "id": "foreground_1", "name": "Foreground 1", "order": 3, "visible": true },
+        { "id": "foreground_2", "name": "Foreground 2", "order": 4, "visible": true }
+      ],
+      "objects": [],
+      "hotspots": [],
+      "mechanics": [],
+      "exits": [],
+      "engineNotes": ""
+    }
+  ],
+  "flow": {
+    "links": []
+  },
+  "assets": [],
+  "aiHistory": []
+}
