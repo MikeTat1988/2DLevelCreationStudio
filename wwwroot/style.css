@@ -390,6 +390,230 @@ p {
   min-height: 34px;
 }
 
+.create-level-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #24405f;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #101b2c 0%, #0d1420 100%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+}
+
+.card-title-row,
+.panel-heading-row,
+.draft-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-title-row h2 {
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+
+.help-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid #38536f;
+  background: #122033;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+
+.prompt-box-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.short-request-input {
+  width: 100%;
+  min-height: 74px;
+  resize: vertical;
+  border: 1px solid #38536f;
+  border-radius: 7px;
+  padding: 9px;
+  color: var(--ink);
+  background: #080d14;
+  line-height: 1.4;
+}
+
+.primary-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.workflow-rail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.workflow-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "num title"
+    "num sub";
+  gap: 0 6px;
+  align-items: center;
+  min-height: 44px;
+  padding: 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0b1220;
+  color: var(--muted);
+}
+
+.workflow-step span {
+  grid-area: num;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #172033;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.workflow-step strong {
+  grid-area: title;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.workflow-step small {
+  grid-area: sub;
+  font-size: 10px;
+}
+
+.workflow-step.is-current {
+  border-color: #1f6feb;
+  background: #0f1b2d;
+}
+
+.workflow-step.is-done span {
+  background: rgba(35, 134, 54, .28);
+  color: var(--accent-2);
+}
+
+.inspector-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.inspector-tabs button {
+  min-height: 32px;
+  border-color: var(--line-soft);
+  background: #0b1220;
+  color: var(--muted);
+}
+
+.inspector-tabs button.is-active {
+  border-color: #1f6feb;
+  background: #13233a;
+  color: var(--ink);
+}
+
+.tab-panels {
+  min-height: 0;
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.is-active {
+  display: grid;
+  gap: 8px;
+}
+
+.empty-workflow,
+.draft-plan-card {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0b1220;
+}
+
+.empty-workflow strong,
+.draft-plan-card strong {
+  font-size: 13px;
+}
+
+.draft-title-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(31, 111, 235, .2);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.rule-list {
+  padding-top: 2px;
+}
+
+.level-tree-panel {
+  display: grid;
+  gap: 6px;
+  max-height: calc(100vh - 250px);
+  overflow: auto;
+  scrollbar-color: #30363d #0d1117;
+}
+
+.internal-brief-details,
+.project-summary-details {
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0b1220;
+}
+
+.internal-brief-details summary,
+.project-summary-details summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.project-summary-body {
+  padding: 0 10px 10px;
+}
+
+.hidden-field-store {
+  display: none;
+}
+
 .section-disclosure {
   width: 100%;
   display: flex;

@@ -202,6 +202,7 @@ const fallbackProject = {
 let project = null;
 let selectedLevelId = null;
 let generationPanelOpen = false;
+let activeInspectorTab = 'plan';
 
 const els = {
   projectSubtitle: document.getElementById('projectSubtitle'),
@@ -439,83 +440,89 @@ function renderGameTree() {
 
 function renderInspector() {
   const level = getSelectedLevel();
+  const hasDraft = Boolean(level.generation.draftPlan);
+  const hasApproved = Boolean(level.generation.approvedPlan);
   els.inspector.innerHTML = `
-    <button type="button" id="generateLevelPanelButton" class="wide-primary">Generate Level</button>
+    <section class="create-level-card">
+      <div class="card-title-row">
+        <div>
+          <h2>Create Level</h2>
+          <p>Say what you want. The studio adds the production context.</p>
+        </div>
+        <button type="button" class="help-icon" title="Write a short natural request. The app will build the internal prompt, image plan, layer plan, and cutout plan automatically.">?</button>
+      </div>
+      <label class="prompt-box-label" for="generationUserRequestInput">Level idea</label>
+      <textarea id="generationUserRequestInput" class="short-request-input" placeholder="generate me a level that is a prison cell">${escapeHtml(level.generation.userRequest)}</textarea>
+      <div class="primary-action-row">
+        <button type="button" id="generateFromRequestButton" class="primary-action">Generate draft</button>
+        <button type="button" id="approveGeneratedPlanButton" ${hasDraft ? '' : 'disabled'}>Approve & build</button>
+      </div>
+    </section>
 
-    <section class="inspector-section">
-      <button type="button" class="section-disclosure" data-toggle="levelGeneration">Generation Process</button>
-      <div id="levelGeneration" class="section-body${generationPanelOpen ? '' : ' collapsed'}">
-        <div class="generation-actions">
-          <button type="button" id="generateFromRequestButton">Generate Draft</button>
-          <button type="button" id="approveGeneratedPlanButton">Approve And Build Tree</button>
+    <div class="workflow-rail" aria-label="Generation progress">
+      <div class="workflow-step ${hasDraft ? 'is-done' : 'is-current'}">
+        <span>1</span>
+        <strong>Draft</strong>
+        <small>image + plan</small>
+      </div>
+      <div class="workflow-step ${hasDraft && !hasApproved ? 'is-current' : hasApproved ? 'is-done' : ''}">
+        <span>2</span>
+        <strong>Review</strong>
+        <small>approve data</small>
+      </div>
+      <div class="workflow-step ${hasApproved ? 'is-current is-done' : ''}">
+        <span>3</span>
+        <strong>Edit</strong>
+        <small>tree + logic</small>
+      </div>
+    </div>
+
+    <nav class="inspector-tabs" aria-label="Right panel tabs">
+      <button type="button" data-tab="plan" class="${activeInspectorTab === 'plan' ? 'is-active' : ''}">Plan</button>
+      <button type="button" data-tab="tree" class="${activeInspectorTab === 'tree' ? 'is-active' : ''}">Tree</button>
+      <button type="button" data-tab="logic" class="${activeInspectorTab === 'logic' ? 'is-active' : ''}">Logic</button>
+    </nav>
+
+    <div class="tab-panels">
+      <section class="tab-panel ${activeInspectorTab === 'plan' ? 'is-active' : ''}" id="tabPlan">
+        <div class="panel-heading-row">
+          <h3>Draft Plan</h3>
+          <button type="button" class="help-icon" title="This is the planned data returned together with the image. After approval, it becomes the editable level tree.">?</button>
         </div>
-        <div class="field">
-          <label for="generationUserRequestInput">What should this level be?</label>
-          <textarea id="generationUserRequestInput" placeholder="generate me a level that is a prison cell">${escapeHtml(level.generation.userRequest)}</textarea>
-        </div>
-        <div class="generation-steps">
-          <article class="generation-step">
-            <strong>1. Draft Image + Plan</strong>
-            <p>User gives one short request. The studio adds app context, so the model plans objects and layers while generating.</p>
-            <textarea id="generationSummaryInput" placeholder="Short level summary">${escapeHtml(level.generation.summary)}</textarea>
-          </article>
-          <article class="generation-step">
-            <strong>2. User Approval</strong>
-            <p>The generated image and its planned object data are reviewed together. No image re-analysis should be needed.</p>
-            <textarea id="generationCompositionInput" placeholder="Layer separation notes">${escapeHtml(level.generation.composition)}</textarea>
-          </article>
-          <article class="generation-step">
-            <strong>3. Build Editable Level</strong>
-            <p>After approval, the planned layers/assets populate the level tree and can be edited individually.</p>
-            <textarea id="generationPromptInput" placeholder="Full level prompt">${escapeHtml(level.generation.fullLevelPrompt)}</textarea>
-          </article>
-        </div>
-        <div class="generation-output-grid">
-          <div>
-            <h3>Required Outputs</h3>
-            <ul class="compact-list">
-              <li>Full composed level preview</li>
-              <li>Clean background plate</li>
-              <li>Transparent PNG cutouts where needed</li>
-              <li>Object/layer list with suggested bounds</li>
-              <li>Logic bindings for puzzle mechanics</li>
-            </ul>
-          </div>
-          <div>
-            <h3>BG Removal Rules</h3>
-            <ul class="compact-list">
-              <li>Movable props: yes</li>
-              <li>Collectibles: yes</li>
-              <li>Door lock / interactive fixtures: usually yes</li>
-              <li>Permanent walls/floor/light: no</li>
-            </ul>
-          </div>
-        </div>
-        <h3>Generated Draft Plan</h3>
         <div id="draftPlanPreview" class="draft-plan-preview"></div>
-        <h3>Planned Asset Slots</h3>
+        <div class="panel-heading-row">
+          <h3>Assets To Produce</h3>
+          <button type="button" class="help-icon" title="Movable objects and collectibles should become transparent PNGs. Permanent room shell stays baked into the background plate.">?</button>
+        </div>
         <div id="assetSlotList" class="asset-slot-list"></div>
-        <h3>Internal Model Brief</h3>
-        <textarea id="testPromptInput" class="prompt-editor" placeholder="Internal prompt shown for debugging">${escapeHtml(level.generation.testPrompt)}</textarea>
-      </div>
-    </section>
+        <details class="internal-brief-details">
+          <summary>Internal model brief</summary>
+          <textarea id="testPromptInput" class="prompt-editor" placeholder="Internal prompt shown for debugging">${escapeHtml(level.generation.testPrompt)}</textarea>
+        </details>
+      </section>
 
-    <section class="inspector-section">
-      <button type="button" class="section-disclosure" data-toggle="levelTree">Level Tree</button>
-      <div id="levelTree" class="section-body"></div>
-    </section>
+      <section class="tab-panel ${activeInspectorTab === 'tree' ? 'is-active' : ''}" id="tabTree">
+        <div class="panel-heading-row">
+          <h3>Level Tree</h3>
+          <button type="button" class="help-icon" title="Right-click an object later to send a focused edit request with only that object, its layer, and relevant logic.">?</button>
+        </div>
+        <div id="levelTree" class="level-tree-panel"></div>
+      </section>
 
-    <section class="inspector-section">
-      <button type="button" class="section-disclosure" data-toggle="levelLogic">Level Logic</button>
-      <div id="levelLogic" class="section-body">
-        <p class="help-text">Readable pseudocode for puzzle rules, blocked attempts, inventory gates, and success state.</p>
+      <section class="tab-panel ${activeInspectorTab === 'logic' ? 'is-active' : ''}" id="tabLogic">
+        <div class="panel-heading-row">
+          <h3>Level Logic</h3>
+          <button type="button" class="help-icon" title="Readable puzzle pseudocode. This describes what must happen, before it becomes mechanics bindings.">?</button>
+        </div>
         <textarea id="logicScriptInput" class="logic-editor">${escapeHtml(level.logicScript)}</textarea>
-      </div>
-    </section>
-
-    <section class="inspector-section">
-      <button type="button" class="section-disclosure" data-toggle="projectSummary">Project Summary</button>
-      <div id="projectSummary" class="section-body collapsed">
+        <details class="project-summary-details">
+          <summary>Project data</summary>
+          <div class="project-summary-body">
+        <div class="hidden-field-store">
+          <textarea id="generationSummaryInput">${escapeHtml(level.generation.summary)}</textarea>
+          <textarea id="generationCompositionInput">${escapeHtml(level.generation.composition)}</textarea>
+          <textarea id="generationPromptInput">${escapeHtml(level.generation.fullLevelPrompt)}</textarea>
+        </div>
         <div class="field">
           <label for="gameTitleInput">Game title</label>
           <input id="gameTitleInput" value="${escapeHtml(project.game.title)}">
@@ -535,8 +542,10 @@ function renderInspector() {
           <div class="summary-row"><strong>Flow links</strong><span>${project.flow.links.length}</span></div>
           <div class="summary-row"><strong>Schema</strong><span>${project.schemaVersion}</span></div>
         </div>
-      </div>
-    </section>
+          </div>
+        </details>
+      </section>
+    </div>
   `;
 
   renderLevelTree(level);
@@ -549,19 +558,30 @@ function renderDraftPlan(level) {
   const root = document.getElementById('draftPlanPreview');
   const plan = level.generation.draftPlan;
   if (!plan) {
-    root.innerHTML = '<div class="layer-empty">No draft yet. Type a short request and click Generate Draft.</div>';
+    root.innerHTML = `
+      <div class="empty-workflow">
+        <strong>No draft yet</strong>
+        <p>Type a short level idea above, then click Generate draft. The app will build the hidden production brief.</p>
+      </div>
+    `;
     return;
   }
 
   root.innerHTML = `
     <div class="draft-plan-card">
-      <strong>${escapeHtml(plan.title)}</strong>
+      <div class="draft-title-row">
+        <strong>${escapeHtml(plan.title)}</strong>
+        <span>${level.generation.approvedPlan ? 'approved' : 'draft'}</span>
+      </div>
       <p>${escapeHtml(plan.intent)}</p>
       <div class="summary-list">
         <div class="summary-row"><strong>Background</strong><span>${plan.backgroundItems.length}</span></div>
         <div class="summary-row"><strong>Movable</strong><span>${plan.movableItems.length}</span></div>
         <div class="summary-row"><strong>Logic rules</strong><span>${plan.logicRules.length}</span></div>
       </div>
+      <ul class="compact-list rule-list">
+        ${plan.logicRules.map((rule) => `<li>${escapeHtml(rule)}</li>`).join('')}
+      </ul>
     </div>
   `;
 }
@@ -570,7 +590,7 @@ function renderAssetSlots(level) {
   const list = document.getElementById('assetSlotList');
   const slots = level.generation.assetSlots ?? [];
   if (slots.length === 0) {
-    list.innerHTML = '<div class="layer-empty">No planned asset slots yet. Use Seed Cell Room Workflow.</div>';
+    list.innerHTML = '<div class="layer-empty">No asset slots yet. Generate a draft first.</div>';
     return;
   }
 
@@ -580,7 +600,7 @@ function renderAssetSlots(level) {
     row.innerHTML = `
       <div>
         <strong>${escapeHtml(slot.name)}</strong>
-        <p>${escapeHtml(slot.layerId)} | ${escapeHtml(slot.logicRole)}</p>
+        <p>${escapeHtml(formatLayerName(slot.layerId))} | ${escapeHtml(slot.logicRole)}</p>
       </div>
       <span>${slot.needsBgRemoval ? 'BG remove' : 'baked'}</span>
     `;
@@ -599,10 +619,11 @@ function renderLevelTree(level) {
       ? []
       : (level.generation.assetSlots ?? []).filter((slot) => slot.layerId === layer.id);
     const characters = project.characters.filter((character) => character.levelId === level.id && character.layerId === layer.id);
+    const childCount = objects.length + plannedSlots.length + characters.length;
     layerNode.innerHTML = `
       <div class="layer-row">
         <span class="layer-name">${escapeHtml(layer.name)}</span>
-        <span class="layer-count">${objects.length + characters.length}</span>
+        <span class="layer-count">${childCount}</span>
       </div>
     `;
 
@@ -638,11 +659,17 @@ function renderLevelTree(level) {
 }
 
 function bindInspectorControls(level) {
+  document.querySelectorAll('.inspector-tabs button').forEach((button) => {
+    button.addEventListener('click', () => {
+      activeInspectorTab = button.dataset.tab;
+      renderInspector();
+    });
+  });
+
   document.querySelectorAll('.section-disclosure').forEach((button) => {
     button.addEventListener('click', () => document.getElementById(button.dataset.toggle).classList.toggle('collapsed'));
   });
 
-  document.getElementById('generateLevelPanelButton').addEventListener('click', openGenerateLevel);
   document.getElementById('generateFromRequestButton').addEventListener('click', generateDraftFromRequest);
   document.getElementById('approveGeneratedPlanButton').addEventListener('click', approveGeneratedPlan);
   document.getElementById('generationUserRequestInput').addEventListener('input', (event) => {
@@ -747,6 +774,7 @@ function openGenerateLevel() {
   }
 
   generationPanelOpen = true;
+  activeInspectorTab = 'plan';
   render();
   focusGenerationInput();
   showStatus(`Type a short level request, then Generate Draft`);
@@ -784,6 +812,7 @@ function generateDraftFromRequest() {
   };
   saveProject();
   generationPanelOpen = true;
+  activeInspectorTab = 'plan';
   render();
   showStatus('Draft image plan generated from short request');
 }
@@ -811,8 +840,14 @@ function approveGeneratedPlan() {
     notes: slot.logicRole
   }));
   saveProject();
+  activeInspectorTab = 'tree';
   render();
   showStatus('Approved plan applied to level tree');
+}
+
+function formatLayerName(layerId) {
+  const layer = defaultLayers.find((item) => item.id === layerId);
+  return layer?.name ?? layerId;
 }
 
 function buildPrisonCellPlan(request) {
