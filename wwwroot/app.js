@@ -203,6 +203,7 @@ let project = null;
 let selectedLevelId = null;
 let generationPanelOpen = false;
 let activeInspectorTab = 'plan';
+let isGenerating = false;
 
 const els = {
   projectSubtitle: document.getElementById('projectSubtitle'),
@@ -291,19 +292,29 @@ function normalizeProject(raw) {
 
   next.levels = next.levels.map((level, index) => {
     const base = createLevel(index + 1);
+    const generation = {
+      ...base.generation,
+      ...(level.generation ?? {}),
+      pipeline: level.generation?.pipeline ?? structuredClone(generationPipelineTemplate),
+      assetSlots: Array.isArray(level.generation?.assetSlots) ? level.generation.assetSlots : [],
+      testPrompt: level.generation?.testPrompt ?? ''
+    };
+
+    if (generation.generatedImageRef?.previewUrl?.includes('cell-room-reference')) {
+      generation.generatedImageRef = null;
+    }
+
+    if (generation.generatedImageRef?.previewUrl?.includes('generated-prison-cell-draft')) {
+      generation.generatedImageRef = null;
+    }
+
     return {
       ...base,
       ...level,
       canvas: { ...base.canvas, ...(level.canvas ?? {}) },
       phaseStatus: { ...base.phaseStatus, ...(level.phaseStatus ?? {}) },
       prompts: { ...base.prompts, ...(level.prompts ?? {}) },
-      generation: {
-        ...base.generation,
-        ...(level.generation ?? {}),
-        pipeline: level.generation?.pipeline ?? structuredClone(generationPipelineTemplate),
-        assetSlots: Array.isArray(level.generation?.assetSlots) ? level.generation.assetSlots : [],
-        testPrompt: level.generation?.testPrompt ?? ''
-      },
+      generation,
       logicScript: level.logicScript ?? base.logicScript,
       layers: Array.isArray(level.layers) && level.layers.length > 0 ? level.layers : structuredClone(defaultLayers),
       objects: Array.isArray(level.objects) ? level.objects : [],
@@ -456,7 +467,7 @@ function renderInspector() {
       <label class="prompt-box-label" for="generationUserRequestInput">Level idea</label>
       <textarea id="generationUserRequestInput" class="short-request-input" placeholder="generate me a level that is a prison cell">${escapeHtml(level.generation.userRequest)}</textarea>
       <div class="primary-action-row">
-        <button type="button" id="generateFromRequestButton" class="primary-action">Generate draft</button>
+        <button type="button" id="generateFromRequestButton" class="primary-action" ${isGenerating ? 'disabled' : ''}>${isGenerating ? 'Generating...' : 'Generate draft'}</button>
         <button type="button" id="approveGeneratedPlanButton" ${hasDraft ? '' : 'disabled'}>Approve & build</button>
       </div>
     </section>
@@ -740,7 +751,9 @@ function renderLevelStage() {
     ? `${imageRef.previewUrl}?draft=${encodeURIComponent(imageRef.revision ?? 'current')}`
     : 'assets/placeholder-level.svg';
   const imageLabel = imageRef
-    ? imageRef.status === 'approved'
+    ? imageRef.status === 'handoff_ready'
+      ? 'Generation request ready for Codex'
+      : imageRef.status === 'approved'
       ? 'Approved generated level image'
       : 'Draft generated level image'
     : 'Level placeholder';
@@ -815,12 +828,14 @@ function focusGenerationInput() {
   });
 }
 
-function generateDraftFromRequest() {
+async function generateDraftFromRequest() {
+  if (isGenerating) return;
+
   const level = getSelectedLevel();
   const request = (level.generation.userRequest || 'generate me a level that is a prison cell').trim();
   const isPrisonCell = /prison|cell|jail|locked/i.test(request);
   const plan = isPrisonCell ? buildPrisonCellPlan(request) : buildGenericRoomPlan(request);
-  const revision = Date.now();
+  const bridgePrompt = plan.internalBrief;
 
   level.generation.approvedPlan = null;
   level.generation.draftPlan = plan;
@@ -833,17 +848,102 @@ function generateDraftFromRequest() {
   level.generation.assetSlots = plan.assetSlots;
   level.logicScript = plan.logicScript;
   level.objects = [];
-  level.generation.generatedImageRef = {
-    status: 'draft_planned',
-    previewUrl: isPrisonCell ? 'assets/cell-room-reference.jpg' : 'assets/placeholder-level.svg',
-    revision,
-    note: 'Draft preview. The current saved draft replaces the previous draft; future bridge output should write one current image reference here.'
-  };
+  level.generation.generatedImageRef = null;
   saveProject();
   generationPanelOpen = true;
   activeInspectorTab = 'plan';
+  isGenerating = true;
   render();
-  showStatus('Draft image plan generated from short request');
+  showStatus('Writing generation request...');
+
+  try {
+    const markdown = buildGenerationRequestMarkdown(level, plan, bridgePrompt);
+    const result = await writeGenerationRequest(level.id, markdown);
+    level.generation.generatedImageRef = {
+      status: 'handoff_ready',
+      previewUrl: null,
+      revision: result.revision,
+      requestPath: result.requestPath,
+      currentRequestPath: result.currentRequestPath,
+      note: 'Generation request written for Codex handoff. Ask Codex to generate from the latest request.'
+    };
+    saveProject();
+    showStatus('Generation request ready for Codex');
+  } catch (error) {
+    level.generation.generatedImageRef = null;
+    saveProject();
+    showStatus(error.message || 'Could not write generation request');
+  } finally {
+    isGenerating = false;
+    render();
+  }
+}
+
+async function writeGenerationRequest(levelId, markdown) {
+  const response = await fetch('/api/write-generation-request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ levelId, markdown })
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `Handoff bridge failed with HTTP ${response.status}`);
+  }
+
+  if (!payload.currentRequestPath || !payload.revision) {
+    throw new Error('Handoff bridge did not return a request path.');
+  }
+
+  return payload;
+}
+
+function buildGenerationRequestMarkdown(level, plan, internalBrief) {
+  return [
+    `# Generation Request: ${plan.title}`,
+    '',
+    `Level: ${level.id} / ${level.name}`,
+    `Created: ${new Date().toISOString()}`,
+    '',
+    '## User Request',
+    '',
+    level.generation.userRequest || 'generate me a level',
+    '',
+    '## What Codex Should Produce',
+    '',
+    '1. Generate a high-quality 2D adventure level image matching the request and internal brief.',
+    '2. Save the image to:',
+    '',
+    '```text',
+    `C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${level.id}-current.png`,
+    '```',
+    '',
+    '3. Do not create extra draft garbage. Replace the current image for this level.',
+    '4. Keep the visual quality comparable to the supplied reference style when relevant.',
+    '5. Preserve the structured plan below; do not re-infer the scene from the image unless explicitly asked.',
+    '',
+    '## Internal Brief',
+    '',
+    '```text',
+    internalBrief,
+    '```',
+    '',
+    '## Draft Structured Plan',
+    '',
+    JSON.stringify({
+      title: plan.title,
+      intent: plan.intent,
+      gameplayPurpose: plan.gameplayPurpose,
+      safetyCheck: plan.safetyCheck,
+      layers: plan.layerPlanText,
+      assetSlots: plan.assetSlots,
+      logicRules: plan.logicRules
+    }, null, 2),
+    '',
+    '## After Saving The Image',
+    '',
+    'Tell the user the image path. The app should then use that path as the current generated level image.'
+  ].join('\n');
 }
 
 function approveGeneratedPlan() {

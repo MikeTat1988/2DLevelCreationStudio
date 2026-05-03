@@ -19,3 +19,14 @@ worktrees/
 *.tmp
 *.temp
 
+# Runtime generated draft images
+wwwroot/assets/generated/draft-*.png
+wwwroot/assets/generated/draft-*.jpg
+wwwroot/assets/generated/draft-*.jpeg
+wwwroot/assets/generated/draft-*.webp
+wwwroot/assets/generated/*-current.png
+!wwwroot/assets/generated/.gitkeep
+handoff/requests/*.md
+!handoff/requests/.gitkeep
+handoff/results/*
+!handoff/results/.gitkeep
