@@ -2,13 +2,12 @@
 
 Local browser-based studio for creating structured 2D kids adventure game projects.
 
-This first version is a standalone static web app. It stores the full project model as JSON, lets you add levels, shows the game tree, and supports full project export/import.
+This is a local browser studio for authoring a level request, handing it to Codex for generation, then applying the generated image and structured elements back into the studio tree.
 
 ## Run
 
 ```powershell
 cd C:\Dev\2DLevelCreationStudio
-$env:OPENAI_API_KEY='your-api-key'
 node server.js
 ```
 
@@ -18,29 +17,40 @@ Then open:
 http://127.0.0.1:5190/
 ```
 
-The app needs `server.js` for the local Codex handoff flow. A plain static server can show the UI, but `Generate draft` will not write the Markdown request file.
+The app needs `server.js` for the local Codex handoff flow. A plain static server can show the UI, but it cannot write/read the local handoff files.
 
 ## Codex Handoff Flow
 
 1. Open the app.
-2. Type a short level idea, for example `generate me a level that is a prison cell`.
-3. Click `Generate draft`.
-4. The app writes a short current image brief to:
+2. Type a short level idea, for example `Inside of a pirate ship`.
+3. Optionally add short level plan notes.
+4. Click `Prepare handoff`.
+5. The app writes the current handoff files:
 
 ```text
-C:\Dev\2DLevelCreationStudio\handoff\requests
+C:\Dev\2DLevelCreationStudio\docs\handoff\general-image-guidelines.md
+C:\Dev\2DLevelCreationStudio\handoff\requests\<level-id>-image-brief-current.md
+C:\Dev\2DLevelCreationStudio\handoff\requests\<level-id>-structured-plan-current.json
 ```
 
-It also writes a structured plan JSON next to the brief. The user-facing brief is intentionally short; stable rules live in `docs/handoff/general-image-guidelines.md`.
-
-5. Ask Codex to generate from the latest image brief.
-6. Codex reads the general guidelines and structured plan, then saves the image to:
+6. Codex reads those three files, generates the image/assets, and saves the current full level image to:
 
 ```text
 C:\Dev\2DLevelCreationStudio\wwwroot\assets\generated\<level-id>-current.png
 ```
 
-If you regenerate, the app overwrites the current brief and current plan for that level. If you edit the brief, the next generation should use the edited brief and then update the nearby structured plan before proceeding.
+7. Click `Apply Codex result` in the studio. The app reads the current structured plan and image, refreshes the level image, updates the level tree, and records the generated asset.
+
+If you regenerate, the app overwrites the current brief and current plan for that level. Runtime handoff files and generated images are intentionally gitignored except for directory keepers.
+
+## Fast File Map
+
+- Server: `C:\Dev\2DLevelCreationStudio\server.js`
+- Studio UI: `C:\Dev\2DLevelCreationStudio\wwwroot\app.js`
+- General generation rules: `C:\Dev\2DLevelCreationStudio\docs\handoff\general-image-guidelines.md`
+- Current generation brief: `C:\Dev\2DLevelCreationStudio\handoff\requests\level_1-image-brief-current.md`
+- Current elements list: `C:\Dev\2DLevelCreationStudio\handoff\requests\level_1-structured-plan-current.json`
+- Current generated image: `C:\Dev\2DLevelCreationStudio\wwwroot\assets\generated\level_1-current.png`
 
 ## What It Is
 

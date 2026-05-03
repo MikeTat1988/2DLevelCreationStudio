@@ -477,6 +477,12 @@ p {
   line-height: 1.4;
 }
 
+.plan-notes-input {
+  min-height: 58px;
+  border-color: var(--line);
+  background: #090d14;
+}
+
 .primary-action-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -599,6 +605,30 @@ button:disabled {
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: #0b1220;
+}
+
+.codex-result-card {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0b1220;
+}
+
+.codex-result-card.is-ready {
+  border-color: rgba(88, 166, 255, .34);
+  background: linear-gradient(180deg, #0d1726 0%, #0b1220 100%);
+}
+
+.codex-result-card.is-done {
+  border-color: rgba(63, 185, 80, .42);
+  background: linear-gradient(180deg, #0d1d16 0%, #0b1220 100%);
+}
+
+.codex-result-card.is-empty {
+  border-style: dashed;
 }
 
 .brief-review-card.is-ready {

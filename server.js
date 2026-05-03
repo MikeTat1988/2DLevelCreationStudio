@@ -35,6 +35,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'GET' && req.url.startsWith('/api/current-generation-result')) {
+      await handleReadCurrentGenerationResult(req, res);
+      return;
+    }
+
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       sendJson(res, 405, { error: 'Method not allowed' });
       return;
@@ -109,6 +114,42 @@ async function handleReadCurrentGenerationRequest(req, res) {
       error: `No current generation request found for ${levelId}.`
     });
   }
+}
+
+async function handleReadCurrentGenerationResult(req, res) {
+  const url = new URL(req.url, `http://${HOST}:${PORT}`);
+  const levelId = safeName(url.searchParams.get('levelId') || 'level');
+  const currentPlanPath = path.join(REQUESTS_DIR, `${levelId}-structured-plan-current.json`);
+  const imagePath = path.join(GENERATED_DIR, `${levelId}-current.png`);
+
+  const [planJson, imageStat] = await Promise.all([
+    fsp.readFile(currentPlanPath, 'utf8').catch(() => null),
+    fsp.stat(imagePath).catch(() => null)
+  ]);
+
+  if (!planJson) {
+    sendJson(res, 404, { error: `No current structured plan found for ${levelId}.` });
+    return;
+  }
+
+  if (!imageStat) {
+    sendJson(res, 404, {
+      error: `No generated image found for ${levelId}.`,
+      expectedImagePath: imagePath,
+      planPath: currentPlanPath
+    });
+    return;
+  }
+
+  sendJson(res, 200, {
+    levelId,
+    planPath: currentPlanPath,
+    planJson,
+    imagePath,
+    imageUrl: `/assets/generated/${levelId}-current.png`,
+    imageRevision: imageStat.mtimeMs,
+    imageLastWriteTime: imageStat.mtime.toISOString()
+  });
 }
 
 async function cleanupRequests(levelId) {

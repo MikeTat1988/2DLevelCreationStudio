@@ -262,7 +262,8 @@ function createLevel(index) {
       approvedPlan: null,
       generatedImageRef: null,
       extractionNotes: '',
-      testPrompt: ''
+      testPrompt: '',
+      planNotes: ''
     },
     logicScript: [
       'Goal: Character reaches the exit after solving the level.',
@@ -303,7 +304,8 @@ function normalizeProject(raw) {
       ...(level.generation ?? {}),
       pipeline: level.generation?.pipeline ?? structuredClone(generationPipelineTemplate),
       assetSlots: Array.isArray(level.generation?.assetSlots) ? level.generation.assetSlots : [],
-      testPrompt: level.generation?.testPrompt ?? ''
+      testPrompt: level.generation?.testPrompt ?? '',
+      planNotes: level.generation?.planNotes ?? ''
     };
 
     if (generation.generatedImageRef?.previewUrl?.includes('cell-room-reference')) {
@@ -400,6 +402,29 @@ function clearGeneratedBriefState(level) {
   level.generation.assetSlots = [];
   level.generation.generatedImageRef = null;
   level.objects = [];
+}
+
+function getCodexResultStatus(level) {
+  const imageRef = level.generation.generatedImageRef;
+  if (imageRef?.status === 'applied') {
+    return {
+      label: 'Applied to Studio',
+      tone: 'done',
+      detail: `Image and ${level.objects.length} tree nodes are active in the level.`
+    };
+  }
+  if (imageRef?.status === 'handoff_ready') {
+    return {
+      label: 'Waiting for Codex',
+      tone: 'ready',
+      detail: 'Brief is ready. Generate in Codex, then apply the result here.'
+    };
+  }
+  return {
+    label: 'Prompt first',
+    tone: 'empty',
+    detail: 'Write a prompt, optionally add plan notes, then prepare the Codex handoff.'
+  };
 }
 
 function getSelectedLevel() {
@@ -499,16 +524,13 @@ function renderGameTree() {
 
 function renderInspector() {
   const level = getSelectedLevel();
-  const hasDraft = Boolean(level.generation.draftPlan);
-  const hasApproved = Boolean(level.generation.approvedPlan);
   const requestRef = level.generation.generatedImageRef ?? {};
   const hasRequest = Boolean(requestRef.currentRequestPath);
   const currentRequest = normalizeRequest(level.generation.userRequest);
   const sourceRequest = normalizeRequest(requestRef.sourceRequest);
-  const isConnectedBrief = hasRequest && hasDraft && sourceRequest && sourceRequest === currentRequest;
-  const visibleBriefTitle = isConnectedBrief
-    ? buildDisplayTitleFromRequest(sourceRequest)
-    : buildDisplayTitleFromRequest(currentRequest);
+  const isConnectedBrief = hasRequest && sourceRequest && sourceRequest === currentRequest;
+  const resultStatus = getCodexResultStatus(level);
+  const visibleBriefTitle = buildDisplayTitleFromRequest(isConnectedBrief ? sourceRequest : currentRequest);
   const revisionLabel = requestRef.revision
     ? `Revision ${requestRef.revision}`
     : 'No revision yet';
@@ -518,103 +540,86 @@ function renderInspector() {
   if (!['brief', 'tree', 'logic'].includes(activeInspectorTab)) {
     activeInspectorTab = 'brief';
   }
-  const animatableItems = (level.generation.assetSlots ?? [])
-    .filter((slot) => slot.movable || slot.needsBgRemoval)
-    .slice(0, 5);
-  const briefStatus = hasApproved
-    ? 'Level tree is built from the approved plan.'
-    : isConnectedBrief
-      ? 'Brief is ready. Open it, review the short image description, then ask Codex to create the image.'
-      : hasRequest
-        ? 'This saved brief belongs to an older request. Regenerate it to refresh the visible state.'
-      : 'No active brief yet. Write one sentence and generate a clean handoff brief.';
 
   els.inspector.innerHTML = `
     <section class="create-level-card">
       <div class="card-title-row">
         <div>
-          <h2>Create Level</h2>
-          <p>Write the simple request. The studio keeps the technical context out of your way.</p>
+          <h2>Codex Level Request</h2>
+          <p>One prompt is enough. Add plan notes only when you want to steer puzzle logic.</p>
         </div>
-        <button type="button" class="help-icon" title="Example: generate me a level that is a prison cell. The app writes a short approval brief and a nearby structured plan for Codex.">?</button>
+        <button type="button" class="help-icon" title="Studio writes the brief and structured elements list. Codex generates the image/assets outside the browser, then Studio applies the result.">?</button>
       </div>
       <label class="prompt-box-label" for="generationUserRequestInput">Level idea</label>
-      <textarea id="generationUserRequestInput" class="short-request-input" placeholder="generate me a level that is a prison cell">${escapeHtml(level.generation.userRequest)}</textarea>
+      <textarea id="generationUserRequestInput" class="short-request-input" placeholder="Inside of a pirate ship">${escapeHtml(level.generation.userRequest)}</textarea>
+      <label class="prompt-box-label" for="generationPlanNotesInput">Optional level plan</label>
+      <textarea id="generationPlanNotesInput" class="short-request-input plan-notes-input" placeholder="Optional: key puzzle, main movable prop, exit rule, mood">${escapeHtml(level.generation.planNotes)}</textarea>
       <div class="primary-action-row">
-        <button type="button" id="generateFromRequestButton" class="primary-action" ${isGenerating ? 'disabled' : ''}>${isGenerating ? 'Writing...' : hasRequest ? 'Regenerate brief' : 'Generate brief'}</button>
-        <button type="button" id="openCurrentRequestButton" ${hasRequest ? '' : 'disabled'}>Open brief</button>
+        <button type="button" id="generateFromRequestButton" class="primary-action" ${isGenerating ? 'disabled' : ''}>${isGenerating ? 'Writing...' : hasRequest ? 'Refresh handoff' : 'Prepare handoff'}</button>
+        <button type="button" id="openCurrentRequestButton" ${hasRequest ? '' : 'disabled'}>Open handoff</button>
       </div>
     </section>
 
-    <div class="workflow-rail" aria-label="Generation progress">
-      <div class="workflow-step ${hasRequest ? 'is-done' : 'is-current'}">
-        <span>1</span>
-        <strong>Brief</strong>
-        <small>short review file</small>
+    <div class="codex-result-card is-${escapeHtml(resultStatus.tone)}">
+      <div class="brief-state-row">
+        <strong>${escapeHtml(resultStatus.label)}</strong>
+        <span>${escapeHtml(requestRef.status ?? 'idle')}</span>
       </div>
-      <div class="workflow-step ${hasRequest && !hasApproved ? 'is-current' : hasApproved ? 'is-done' : ''}">
-        <span>2</span>
-        <strong>Image</strong>
-        <small>Codex handoff</small>
+      <p>${escapeHtml(resultStatus.detail)}</p>
+      ${hasRequest ? `
+        <div class="brief-description-box">
+          <strong>${escapeHtml(visibleBriefTitle)}</strong>
+          <p>${escapeHtml(isConnectedBrief ? (level.generation.summary || 'Handoff matches the current prompt.') : 'Prompt changed. Refresh the handoff before asking Codex to generate.')}</p>
+          <small>${escapeHtml(revisionLabel)} | ${escapeHtml(updatedLabel)}</small>
+        </div>
+      ` : ''}
+      <div class="primary-action-row">
+        <button type="button" id="applyCodexResultButton" ${hasRequest ? '' : 'disabled'}>Apply Codex result</button>
+        <button type="button" id="openBriefFromCardButton" ${hasRequest ? '' : 'disabled'}>Read files</button>
       </div>
-      <div class="workflow-step ${hasApproved ? 'is-current is-done' : ''}">
-        <span>3</span>
-        <strong>Build</strong>
-        <small>tree + logic</small>
-      </div>
+      <details class="internal-brief-details">
+        <summary>File locations</summary>
+        <div class="file-reference-list">
+          <div><strong>General rules</strong><span>C:\\Dev\\2DLevelCreationStudio\\docs\\handoff\\general-image-guidelines.md</span></div>
+          <div><strong>Generation brief</strong><span>${escapeHtml(requestRef.currentRequestPath ?? 'not written yet')}</span></div>
+          <div><strong>Elements list</strong><span>${escapeHtml(requestRef.currentPlanPath ?? 'not written yet')}</span></div>
+          <div><strong>Generated image</strong><span>C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${escapeHtml(level.id)}-current.png</span></div>
+        </div>
+      </details>
     </div>
 
     <nav class="inspector-tabs" aria-label="Right panel tabs">
-      <button type="button" data-tab="brief" class="${activeInspectorTab === 'brief' ? 'is-active' : ''}">Brief</button>
+      <button type="button" data-tab="brief" class="${activeInspectorTab === 'brief' ? 'is-active' : ''}">Project</button>
       <button type="button" data-tab="tree" class="${activeInspectorTab === 'tree' ? 'is-active' : ''}">Tree</button>
       <button type="button" data-tab="logic" class="${activeInspectorTab === 'logic' ? 'is-active' : ''}">Logic</button>
     </nav>
 
     <div class="tab-panels">
       <section class="tab-panel ${activeInspectorTab === 'brief' ? 'is-active' : ''}" id="tabBrief">
-        <div class="panel-heading-row">
-          <h3>Image Brief</h3>
-          <button type="button" class="help-icon" title="This is the only file you need to read before asking Codex to generate the image. The full structured plan is stored nearby for later automation.">?</button>
-        </div>
-        <div class="brief-review-card ${hasRequest ? 'is-ready' : ''}">
-          <div class="brief-state-row">
-            <strong>${isConnectedBrief ? 'Ready for review' : hasRequest ? 'Refresh needed' : 'Waiting for request'}</strong>
-            <span>${hasApproved ? 'approved' : isConnectedBrief ? 'handoff ready' : hasRequest ? 'stale' : 'empty'}</span>
+        <div class="project-summary-details project-summary-body">
+          <div class="hidden-field-store">
+            <textarea id="generationSummaryInput">${escapeHtml(level.generation.summary)}</textarea>
+            <textarea id="generationCompositionInput">${escapeHtml(level.generation.composition)}</textarea>
+            <textarea id="generationPromptInput">${escapeHtml(level.generation.fullLevelPrompt)}</textarea>
+            <textarea id="testPromptInput">${escapeHtml(level.generation.testPrompt)}</textarea>
           </div>
-          <p>${escapeHtml(briefStatus)}</p>
-          ${isConnectedBrief ? `
-            <div class="brief-description-box">
-              <strong>${escapeHtml(visibleBriefTitle)}</strong>
-              <p>${escapeHtml(level.generation.draftPlan.intent)}</p>
-              <small>${escapeHtml(revisionLabel)} | ${escapeHtml(updatedLabel)}</small>
-            </div>
-            <div class="panel-heading-row compact-heading">
-              <h3>Animatable Items</h3>
-              <button type="button" class="help-icon" title="Short review list only. The complete object and layer plan stays in the nearby JSON file.">?</button>
-            </div>
-            <ul class="compact-list animatable-review-list">
-              ${animatableItems.length
-                ? animatableItems.map((slot) => `<li>${escapeHtml(slot.name)} <span>${escapeHtml(slot.logicRole)}</span></li>`).join('')
-                : '<li>No movable items planned yet.</li>'}
-            </ul>
-          ` : `
-            <div class="empty-workflow">
-              <strong>${hasRequest ? 'Brief is out of sync' : 'No brief generated'}</strong>
-              <p>${escapeHtml(hasRequest ? 'The request text changed or this is old saved data. Click Regenerate brief to write a fresh brief for the current request.' : 'Use a short prompt like: generate me a level that is a prison cell.')}</p>
-            </div>
-          `}
-          <div class="brief-action-row">
-            <button type="button" id="openBriefFromCardButton" ${hasRequest ? '' : 'disabled'}>Read brief</button>
-            <button type="button" id="approveGeneratedPlanButton" ${isConnectedBrief ? '' : 'disabled'}>${hasApproved ? 'Rebuild tree' : 'Apply to tree'}</button>
+          <div class="field">
+            <label for="gameTitleInput">Game title</label>
+            <input id="gameTitleInput" value="${escapeHtml(project.game.title)}">
           </div>
-          <details class="internal-brief-details">
-            <summary>Files for Codex</summary>
-            <div class="file-reference-list">
-              <div><strong>Brief</strong><span>${escapeHtml(requestRef.currentRequestPath ?? 'not written yet')}</span></div>
-              <div><strong>Structured plan</strong><span>${escapeHtml(requestRef.currentPlanPath ?? 'not written yet')}</span></div>
-              <div><strong>General rules</strong><span>C:\\Dev\\2DLevelCreationStudio\\docs\\handoff\\general-image-guidelines.md</span></div>
-            </div>
-          </details>
+          <div class="field">
+            <label for="gameNotesInput">Game notes</label>
+            <textarea id="gameNotesInput">${escapeHtml(project.game.notes)}</textarea>
+          </div>
+          <button type="button" id="openAssetsDirectoryButton">Show Assets Directory</button>
+          <div class="summary-list">
+            <div class="summary-row"><strong>Project id</strong><span>${escapeHtml(project.game.id)}</span></div>
+            <div class="summary-row"><strong>Selected level id</strong><span>${escapeHtml(level.id)}</span></div>
+            <div class="summary-row"><strong>Objects in tree</strong><span>${level.objects.length}</span></div>
+            <div class="summary-row"><strong>Levels</strong><span>${project.levels.length}</span></div>
+            <div class="summary-row"><strong>Characters</strong><span>${project.characters.length}</span></div>
+            <div class="summary-row"><strong>Assets</strong><span>${project.assets.length}</span></div>
+          </div>
         </div>
       </section>
 
@@ -632,36 +637,6 @@ function renderInspector() {
           <button type="button" class="help-icon" title="Readable puzzle pseudocode. This describes what must happen, before it becomes mechanics bindings.">?</button>
         </div>
         <textarea id="logicScriptInput" class="logic-editor">${escapeHtml(level.logicScript)}</textarea>
-        <details class="project-summary-details">
-          <summary>Project data</summary>
-          <div class="project-summary-body">
-        <div class="hidden-field-store">
-          <textarea id="generationSummaryInput">${escapeHtml(level.generation.summary)}</textarea>
-          <textarea id="generationCompositionInput">${escapeHtml(level.generation.composition)}</textarea>
-          <textarea id="generationPromptInput">${escapeHtml(level.generation.fullLevelPrompt)}</textarea>
-          <textarea id="testPromptInput">${escapeHtml(level.generation.testPrompt)}</textarea>
-        </div>
-        <div class="field">
-          <label for="gameTitleInput">Game title</label>
-          <input id="gameTitleInput" value="${escapeHtml(project.game.title)}">
-        </div>
-        <div class="field">
-          <label for="gameNotesInput">Game notes</label>
-          <textarea id="gameNotesInput">${escapeHtml(project.game.notes)}</textarea>
-        </div>
-        <button type="button" id="openAssetsDirectoryButton">Open Assets Directory</button>
-        <div class="summary-list">
-          <div class="summary-row"><strong>Project id</strong><span>${escapeHtml(project.game.id)}</span></div>
-          <div class="summary-row"><strong>Selected level id</strong><span>${escapeHtml(level.id)}</span></div>
-          <div class="summary-row"><strong>Levels</strong><span>${project.levels.length}</span></div>
-          <div class="summary-row"><strong>Characters</strong><span>${project.characters.length}</span></div>
-          <div class="summary-row"><strong>Inventory</strong><span>${project.inventory.length}</span></div>
-          <div class="summary-row"><strong>Assets</strong><span>${project.assets.length}</span></div>
-          <div class="summary-row"><strong>Flow links</strong><span>${project.flow.links.length}</span></div>
-          <div class="summary-row"><strong>Schema</strong><span>${project.schemaVersion}</span></div>
-        </div>
-          </div>
-        </details>
       </section>
     </div>
   `;
@@ -732,7 +707,7 @@ function bindInspectorControls(level) {
   document.getElementById('generateFromRequestButton').addEventListener('click', generateDraftFromRequest);
   document.getElementById('openCurrentRequestButton').addEventListener('click', openCurrentRequest);
   document.getElementById('openBriefFromCardButton')?.addEventListener('click', openCurrentRequest);
-  document.getElementById('approveGeneratedPlanButton')?.addEventListener('click', approveGeneratedPlan);
+  document.getElementById('applyCodexResultButton')?.addEventListener('click', applyCodexResult);
   document.getElementById('generationUserRequestInput').addEventListener('input', (event) => {
     const nextRequest = event.target.value;
     const previousSourceRequest = normalizeRequest(level.generation.generatedImageRef?.sourceRequest);
@@ -744,6 +719,20 @@ function bindInspectorControls(level) {
       render();
       focusGenerationInput();
       showStatus('Request changed. Generate a fresh brief.');
+      return;
+    }
+    saveProject();
+  });
+  document.getElementById('generationPlanNotesInput')?.addEventListener('input', (event) => {
+    const nextNotes = event.target.value;
+    level.generation.planNotes = nextNotes;
+    if (level.generation.generatedImageRef) {
+      clearGeneratedBriefState(level);
+      level.generation.planNotes = nextNotes;
+      saveProject();
+      render();
+      focusGenerationInput();
+      showStatus('Plan notes changed. Prepare a fresh handoff.');
       return;
     }
     saveProject();
@@ -826,6 +815,8 @@ function renderLevelStage() {
   const imageLabel = imageRef
     ? imageRef.status === 'handoff_ready'
       ? 'Generation request ready for Codex'
+      : imageRef.status === 'applied'
+      ? 'Applied generated level image'
       : imageRef.status === 'approved'
       ? 'Approved generated level image'
       : 'Draft generated level image'
@@ -887,7 +878,7 @@ function openGenerateLevel() {
   activeInspectorTab = 'brief';
   render();
   focusGenerationInput();
-  showStatus('Type a short level request, then Generate brief');
+  showStatus('Type a short level request, then prepare the Codex handoff');
 }
 
 function focusGenerationInput() {
@@ -978,6 +969,110 @@ async function writeGenerationRequest(levelId, markdown, planJson) {
   return payload;
 }
 
+async function readCurrentGenerationResult(levelId) {
+  const response = await fetch(`/api/current-generation-result?levelId=${encodeURIComponent(levelId)}`, {
+    cache: 'no-store'
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `Could not read Codex result (${response.status})`);
+  }
+  return payload;
+}
+
+async function applyCodexResult() {
+  const level = getSelectedLevel();
+  try {
+    const result = await readCurrentGenerationResult(level.id);
+    const planJson = JSON.parse(result.planJson);
+    applyStructuredPlanToLevel(level, planJson, result);
+    saveProject();
+    activeInspectorTab = 'tree';
+    render();
+    showStatus('Codex result applied to Studio');
+  } catch (error) {
+    showStatus(error.message || 'Could not apply Codex result');
+  }
+}
+
+function applyStructuredPlanToLevel(level, planJson, result) {
+  const plan = planJson.plan ?? {};
+  const assetSlots = Array.isArray(plan.assetSlots) ? plan.assetSlots : [];
+  const sourceRequest = normalizeRequest(planJson.sourceRequest || planJson.userRequest || level.generation.userRequest);
+  const revision = Math.round(Number(result.imageRevision || Date.now()));
+
+  level.generation.userRequest = planJson.userRequest || level.generation.userRequest;
+  level.generation.planNotes = planJson.planNotes || level.generation.planNotes || '';
+  level.generation.summary = plan.intent || '';
+  level.generation.composition = plan.layerPlanText || '';
+  level.generation.gameplayPurpose = plan.gameplayPurpose || '';
+  level.generation.safetyCheck = plan.safetyCheck || '';
+  level.generation.assetSlots = structuredClone(assetSlots);
+  level.generation.draftPlan = {
+    title: plan.title || buildDisplayTitleFromRequest(sourceRequest),
+    intent: plan.intent || '',
+    gameplayPurpose: plan.gameplayPurpose || '',
+    safetyCheck: plan.safetyCheck || '',
+    backgroundItems: plan.backgroundItems || [],
+    movableItems: plan.movableItems || [],
+    logicRules: plan.logicRules || [],
+    layerPlanText: plan.layerPlanText || '',
+    assetSlots: structuredClone(assetSlots),
+    sourceRequest,
+    createdAt: planJson.createdAt || new Date().toISOString()
+  };
+  level.generation.approvedPlan = structuredClone(level.generation.draftPlan);
+  level.generation.generatedImageRef = {
+    ...(level.generation.generatedImageRef ?? {}),
+    status: 'applied',
+    previewUrl: result.imageUrl,
+    revision,
+    sourceRequest,
+    generatedAt: result.imageLastWriteTime || new Date().toISOString(),
+    currentPlanPath: result.planPath,
+    currentRequestPath: level.generation.generatedImageRef?.currentRequestPath ?? `C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\${level.id}-image-brief-current.md`,
+    appliedAt: new Date().toISOString(),
+    note: 'Codex-generated image and structured plan are applied to the level.'
+  };
+
+  level.objects = assetSlots.map((slot) => ({
+    id: slot.objectId || slot.id,
+    name: slot.name || slot.id,
+    layerId: slot.layerId || 'foreground_1',
+    position: slot.position || { x: 768, y: 432 },
+    size: slot.size || { width: 160, height: 100 },
+    interactive: Boolean(slot.interactive),
+    exportSeparately: Boolean(slot.needsBgRemoval),
+    movable: Boolean(slot.movable),
+    occludesPlayer: slot.occludesPlayer ?? 'none',
+    assetRef: slot.id,
+    notes: slot.logicRole || ''
+  }));
+
+  const backgroundAsset = {
+    id: `${level.id}_background_current`,
+    levelId: level.id,
+    name: `${plan.title || level.name} background`,
+    type: 'generated_level_image',
+    url: result.imageUrl,
+    filePath: result.imagePath,
+    revision
+  };
+  project.assets = [
+    ...project.assets.filter((asset) => asset.id !== backgroundAsset.id),
+    backgroundAsset
+  ];
+
+  if (Array.isArray(plan.logicRules) && plan.logicRules.length > 0) {
+    level.logicScript = [
+      `Goal: ${plan.gameplayPurpose || 'Solve the level puzzle and reach the exit.'}`,
+      '',
+      'Rules:',
+      ...plan.logicRules.map((rule) => `- ${rule}`)
+    ].join('\n');
+  }
+}
+
 function buildGenerationBriefMarkdown(level, plan) {
   const animatable = plan.assetSlots
     .filter((slot) => slot.movable || slot.needsBgRemoval)
@@ -1001,6 +1096,9 @@ function buildGenerationBriefMarkdown(level, plan) {
     '',
     buildUserFacingImageDescription(plan),
     '',
+    ...(level.generation.planNotes.trim()
+      ? ['## Optional Level Plan', '', level.generation.planNotes.trim(), '']
+      : []),
     '## Animatable / Separable Items',
     '',
     ...(animatable.length ? animatable : ['- None planned yet.']),
@@ -1024,6 +1122,7 @@ function buildStructuredPlanJson(level, plan, internalBrief) {
     createdAt: new Date().toISOString(),
     userRequest: level.generation.userRequest || '',
     sourceRequest: plan.sourceRequest || level.generation.userRequest || '',
+    planNotes: level.generation.planNotes || '',
     generalGuidelinesPath: 'C:\\Dev\\2DLevelCreationStudio\\docs\\handoff\\general-image-guidelines.md',
     outputImagePath: `C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${level.id}-current.png`,
     internalBrief,
@@ -1142,6 +1241,7 @@ function buildPrisonCellPlan(request) {
 
 function buildGenericRoomPlan(request) {
   const safeName = request.replace(/^generate me a level that is\s+/i, '').trim() || 'adventure room';
+  const notes = getSelectedLevel().generation.planNotes.trim();
   const assetSlots = [
     {
       id: 'asset_background_room',
@@ -1182,7 +1282,7 @@ function buildGenericRoomPlan(request) {
 
   return {
     title: safeName,
-    intent: `A child-safe adventure level based on: ${request}`,
+    intent: notes ? `A child-safe adventure level based on: ${request}. Plan notes: ${notes}` : `A child-safe adventure level based on: ${request}`,
     gameplayPurpose: 'Create a readable room with at least one interaction, one collectible or clue, and one exit.',
     safetyCheck: 'No horror, gore, realistic violence, weapons, drugs, alcohol, or adult themes.',
     backgroundItems: ['room shell', 'walkable floor', 'exit area'],
@@ -1196,8 +1296,10 @@ function buildGenericRoomPlan(request) {
 }
 
 function buildInternalBrief({ request, title, style, mustPlan }) {
+  const notes = getSelectedLevel().generation.planNotes.trim();
   return [
     `User request: "${request}"`,
+    ...(notes ? ['', `User level plan notes: ${notes}`] : []),
     '',
     `Generate: ${title}`,
     `Style: ${style}.`,
