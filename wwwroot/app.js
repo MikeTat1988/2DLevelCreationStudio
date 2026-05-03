@@ -202,7 +202,7 @@ const fallbackProject = {
 let project = null;
 let selectedLevelId = null;
 let generationPanelOpen = false;
-let activeInspectorTab = 'plan';
+let activeInspectorTab = 'brief';
 let isGenerating = false;
 
 const els = {
@@ -461,63 +461,106 @@ function renderInspector() {
   const level = getSelectedLevel();
   const hasDraft = Boolean(level.generation.draftPlan);
   const hasApproved = Boolean(level.generation.approvedPlan);
+  const requestRef = level.generation.generatedImageRef ?? {};
+  const hasRequest = Boolean(requestRef.currentRequestPath);
+  if (!['brief', 'tree', 'logic'].includes(activeInspectorTab)) {
+    activeInspectorTab = 'brief';
+  }
+  const animatableItems = (level.generation.assetSlots ?? [])
+    .filter((slot) => slot.movable || slot.needsBgRemoval)
+    .slice(0, 5);
+  const briefStatus = hasApproved
+    ? 'Level tree is built from the approved plan.'
+    : hasRequest
+      ? 'Brief is ready. Open it, review the short image description, then ask Codex to create the image.'
+      : 'No active brief yet. Write one sentence and generate a clean handoff brief.';
+
   els.inspector.innerHTML = `
     <section class="create-level-card">
       <div class="card-title-row">
         <div>
           <h2>Create Level</h2>
-          <p>Say what you want. The studio adds the production context.</p>
+          <p>Write the simple request. The studio keeps the technical context out of your way.</p>
         </div>
-        <button type="button" class="help-icon" title="Write a short natural request. The app will build the internal prompt, image plan, layer plan, and cutout plan automatically.">?</button>
+        <button type="button" class="help-icon" title="Example: generate me a level that is a prison cell. The app writes a short approval brief and a nearby structured plan for Codex.">?</button>
       </div>
       <label class="prompt-box-label" for="generationUserRequestInput">Level idea</label>
       <textarea id="generationUserRequestInput" class="short-request-input" placeholder="generate me a level that is a prison cell">${escapeHtml(level.generation.userRequest)}</textarea>
       <div class="primary-action-row">
-        <button type="button" id="generateFromRequestButton" class="primary-action" ${isGenerating ? 'disabled' : ''}>${isGenerating ? 'Generating...' : 'Generate draft'}</button>
-        <button type="button" id="approveGeneratedPlanButton" ${hasDraft ? '' : 'disabled'}>Approve & build</button>
+        <button type="button" id="generateFromRequestButton" class="primary-action" ${isGenerating ? 'disabled' : ''}>${isGenerating ? 'Writing...' : hasRequest ? 'Regenerate brief' : 'Generate brief'}</button>
+        <button type="button" id="openCurrentRequestButton" ${hasRequest ? '' : 'disabled'}>Open brief</button>
       </div>
     </section>
 
     <div class="workflow-rail" aria-label="Generation progress">
-      <div class="workflow-step ${hasDraft ? 'is-done' : 'is-current'}">
+      <div class="workflow-step ${hasRequest ? 'is-done' : 'is-current'}">
         <span>1</span>
-        <strong>Draft</strong>
-        <small>image + plan</small>
+        <strong>Brief</strong>
+        <small>short review file</small>
       </div>
-      <div class="workflow-step ${hasDraft && !hasApproved ? 'is-current' : hasApproved ? 'is-done' : ''}">
+      <div class="workflow-step ${hasRequest && !hasApproved ? 'is-current' : hasApproved ? 'is-done' : ''}">
         <span>2</span>
-        <strong>Review</strong>
-        <small>approve data</small>
+        <strong>Image</strong>
+        <small>Codex handoff</small>
       </div>
       <div class="workflow-step ${hasApproved ? 'is-current is-done' : ''}">
         <span>3</span>
-        <strong>Edit</strong>
+        <strong>Build</strong>
         <small>tree + logic</small>
       </div>
     </div>
 
     <nav class="inspector-tabs" aria-label="Right panel tabs">
-      <button type="button" data-tab="plan" class="${activeInspectorTab === 'plan' ? 'is-active' : ''}">Plan</button>
+      <button type="button" data-tab="brief" class="${activeInspectorTab === 'brief' ? 'is-active' : ''}">Brief</button>
       <button type="button" data-tab="tree" class="${activeInspectorTab === 'tree' ? 'is-active' : ''}">Tree</button>
       <button type="button" data-tab="logic" class="${activeInspectorTab === 'logic' ? 'is-active' : ''}">Logic</button>
     </nav>
 
     <div class="tab-panels">
-      <section class="tab-panel ${activeInspectorTab === 'plan' ? 'is-active' : ''}" id="tabPlan">
+      <section class="tab-panel ${activeInspectorTab === 'brief' ? 'is-active' : ''}" id="tabBrief">
         <div class="panel-heading-row">
-          <h3>Draft Plan</h3>
-          <button type="button" class="help-icon" title="This is the planned data returned together with the image. After approval, it becomes the editable level tree.">?</button>
+          <h3>Image Brief</h3>
+          <button type="button" class="help-icon" title="This is the only file you need to read before asking Codex to generate the image. The full structured plan is stored nearby for later automation.">?</button>
         </div>
-        <div id="draftPlanPreview" class="draft-plan-preview"></div>
-        <div class="panel-heading-row">
-          <h3>Assets To Produce</h3>
-          <button type="button" class="help-icon" title="Movable objects and collectibles should become transparent PNGs. Permanent room shell stays baked into the background plate.">?</button>
+        <div class="brief-review-card ${hasRequest ? 'is-ready' : ''}">
+          <div class="brief-state-row">
+            <strong>${hasRequest ? 'Ready for review' : 'Waiting for request'}</strong>
+            <span>${hasApproved ? 'approved' : hasRequest ? 'handoff ready' : 'empty'}</span>
+          </div>
+          <p>${escapeHtml(briefStatus)}</p>
+          ${hasDraft ? `
+            <div class="brief-description-box">
+              <strong>${escapeHtml(level.generation.draftPlan.title)}</strong>
+              <p>${escapeHtml(level.generation.draftPlan.intent)}</p>
+            </div>
+            <div class="panel-heading-row compact-heading">
+              <h3>Animatable Items</h3>
+              <button type="button" class="help-icon" title="Short review list only. The complete object and layer plan stays in the nearby JSON file.">?</button>
+            </div>
+            <ul class="compact-list animatable-review-list">
+              ${animatableItems.length
+                ? animatableItems.map((slot) => `<li>${escapeHtml(slot.name)} <span>${escapeHtml(slot.logicRole)}</span></li>`).join('')
+                : '<li>No movable items planned yet.</li>'}
+            </ul>
+          ` : `
+            <div class="empty-workflow">
+              <strong>No brief generated</strong>
+              <p>Use a short prompt like: generate me a level that is a prison cell.</p>
+            </div>
+          `}
+          <div class="brief-action-row">
+            <button type="button" id="openBriefFromCardButton" ${hasRequest ? '' : 'disabled'}>Read brief</button>
+            <button type="button" id="approveGeneratedPlanButton" ${hasDraft ? '' : 'disabled'}>${hasApproved ? 'Rebuild tree' : 'Apply to tree'}</button>
+          </div>
+          <details class="internal-brief-details">
+            <summary>Files for Codex</summary>
+            <div class="file-reference-list">
+              <div><strong>Brief</strong><span>${escapeHtml(requestRef.currentRequestPath ?? 'not written yet')}</span></div>
+              <div><strong>Structured plan</strong><span>${escapeHtml(requestRef.currentPlanPath ?? 'not written yet')}</span></div>
+              <div><strong>General rules</strong><span>C:\\Dev\\2DLevelCreationStudio\\docs\\handoff\\general-image-guidelines.md</span></div>
+            </div>
+          </details>
         </div>
-        <div id="assetSlotList" class="asset-slot-list"></div>
-        <details class="internal-brief-details">
-          <summary>Internal model brief</summary>
-          <textarea id="testPromptInput" class="prompt-editor" placeholder="Internal prompt shown for debugging">${escapeHtml(level.generation.testPrompt)}</textarea>
-        </details>
       </section>
 
       <section class="tab-panel ${activeInspectorTab === 'tree' ? 'is-active' : ''}" id="tabTree">
@@ -541,6 +584,7 @@ function renderInspector() {
           <textarea id="generationSummaryInput">${escapeHtml(level.generation.summary)}</textarea>
           <textarea id="generationCompositionInput">${escapeHtml(level.generation.composition)}</textarea>
           <textarea id="generationPromptInput">${escapeHtml(level.generation.fullLevelPrompt)}</textarea>
+          <textarea id="testPromptInput">${escapeHtml(level.generation.testPrompt)}</textarea>
         </div>
         <div class="field">
           <label for="gameTitleInput">Game title</label>
@@ -568,77 +612,19 @@ function renderInspector() {
   `;
 
   renderLevelTree(level);
-  renderAssetSlots(level);
-  renderDraftPlan(level);
   bindInspectorControls(level);
-}
-
-function renderDraftPlan(level) {
-  const root = document.getElementById('draftPlanPreview');
-  const plan = level.generation.draftPlan;
-  if (!plan) {
-    root.innerHTML = `
-      <div class="empty-workflow">
-        <strong>No draft yet</strong>
-        <p>Type a short level idea above, then click Generate draft. The app will build the hidden production brief.</p>
-      </div>
-    `;
-    return;
-  }
-
-  root.innerHTML = `
-    <div class="draft-plan-card">
-      <div class="draft-title-row">
-        <strong>${escapeHtml(plan.title)}</strong>
-        <span>${level.generation.approvedPlan ? 'approved' : 'draft'}</span>
-      </div>
-      <p>${escapeHtml(plan.intent)}</p>
-      <div class="summary-list">
-        <div class="summary-row"><strong>Background</strong><span>${plan.backgroundItems.length}</span></div>
-        <div class="summary-row"><strong>Movable</strong><span>${plan.movableItems.length}</span></div>
-        <div class="summary-row"><strong>Logic rules</strong><span>${plan.logicRules.length}</span></div>
-      </div>
-      <ul class="compact-list rule-list">
-        ${plan.logicRules.map((rule) => `<li>${escapeHtml(rule)}</li>`).join('')}
-      </ul>
-    </div>
-  `;
-}
-
-function renderAssetSlots(level) {
-  const list = document.getElementById('assetSlotList');
-  const slots = level.generation.assetSlots ?? [];
-  if (slots.length === 0) {
-    list.innerHTML = '<div class="layer-empty">No asset slots yet. Generate a draft first.</div>';
-    return;
-  }
-
-  list.replaceChildren(...slots.map((slot) => {
-    const row = document.createElement('div');
-    row.className = 'asset-slot-row';
-    row.innerHTML = `
-      <div>
-        <strong>${escapeHtml(slot.name)}</strong>
-        <p>${escapeHtml(formatLayerName(slot.layerId))} | ${escapeHtml(slot.logicRole)}</p>
-      </div>
-      <span>${slot.needsBgRemoval ? 'BG remove' : 'baked'}</span>
-    `;
-    return row;
-  }));
 }
 
 function renderLevelTree(level) {
   const root = document.getElementById('levelTree');
+  if (!root) return;
   const orderedLayers = [...level.layers].sort((a, b) => a.order - b.order);
   root.replaceChildren(...orderedLayers.map((layer) => {
     const layerNode = document.createElement('div');
     layerNode.className = 'layer-node';
     const objects = level.objects.filter((object) => object.layerId === layer.id);
-    const plannedSlots = level.generation.approvedPlan
-      ? []
-      : (level.generation.assetSlots ?? []).filter((slot) => slot.layerId === layer.id);
     const characters = project.characters.filter((character) => character.levelId === level.id && character.layerId === layer.id);
-    const childCount = objects.length + plannedSlots.length + characters.length;
+    const childCount = objects.length + characters.length;
     layerNode.innerHTML = `
       <div class="layer-row">
         <span class="layer-name">${escapeHtml(layer.name)}</span>
@@ -650,7 +636,6 @@ function renderLevelTree(level) {
     children.className = 'layer-children';
     [
       ...objects.map((item) => ({ ...item, nodeType: 'object' })),
-      ...plannedSlots.map((item) => ({ ...item, nodeType: item.movable ? 'planned movable' : 'planned asset' })),
       ...characters.map((item) => ({ ...item, nodeType: 'character' }))
     ]
       .forEach((item) => {
@@ -690,44 +675,46 @@ function bindInspectorControls(level) {
   });
 
   document.getElementById('generateFromRequestButton').addEventListener('click', generateDraftFromRequest);
-  document.getElementById('approveGeneratedPlanButton').addEventListener('click', approveGeneratedPlan);
+  document.getElementById('openCurrentRequestButton').addEventListener('click', openCurrentRequest);
+  document.getElementById('openBriefFromCardButton')?.addEventListener('click', openCurrentRequest);
+  document.getElementById('approveGeneratedPlanButton')?.addEventListener('click', approveGeneratedPlan);
   document.getElementById('generationUserRequestInput').addEventListener('input', (event) => {
     level.generation.userRequest = event.target.value;
     saveProject();
   });
-  document.getElementById('generationSummaryInput').addEventListener('input', (event) => {
+  document.getElementById('generationSummaryInput')?.addEventListener('input', (event) => {
     level.generation.summary = event.target.value;
     saveProject();
   });
-  document.getElementById('generationCompositionInput').addEventListener('input', (event) => {
+  document.getElementById('generationCompositionInput')?.addEventListener('input', (event) => {
     level.generation.composition = event.target.value;
     saveProject();
   });
-  document.getElementById('generationPromptInput').addEventListener('input', (event) => {
+  document.getElementById('generationPromptInput')?.addEventListener('input', (event) => {
     level.generation.fullLevelPrompt = event.target.value;
     saveProject();
   });
-  document.getElementById('testPromptInput').addEventListener('input', (event) => {
+  document.getElementById('testPromptInput')?.addEventListener('input', (event) => {
     level.generation.testPrompt = event.target.value;
     saveProject();
   });
-  document.getElementById('logicScriptInput').addEventListener('input', (event) => {
+  document.getElementById('logicScriptInput')?.addEventListener('input', (event) => {
     level.logicScript = event.target.value;
     saveProject();
   });
 
-  document.getElementById('gameTitleInput').addEventListener('input', (event) => {
+  document.getElementById('gameTitleInput')?.addEventListener('input', (event) => {
     project.game.title = event.target.value;
     saveProject();
     renderHeader();
   });
 
-  document.getElementById('gameNotesInput').addEventListener('input', (event) => {
+  document.getElementById('gameNotesInput')?.addEventListener('input', (event) => {
     project.game.notes = event.target.value;
     saveProject();
   });
 
-  document.getElementById('openAssetsDirectoryButton').addEventListener('click', () => {
+  document.getElementById('openAssetsDirectoryButton')?.addEventListener('click', () => {
     showStatus('Browser security blocks opening local directories directly. Use C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets for now.');
   });
 }
@@ -831,10 +818,10 @@ function openGenerateLevel() {
   }
 
   generationPanelOpen = true;
-  activeInspectorTab = 'plan';
+  activeInspectorTab = 'brief';
   render();
   focusGenerationInput();
-  showStatus(`Type a short level request, then Generate Draft`);
+  showStatus('Type a short level request, then Generate brief');
 }
 
 function focusGenerationInput() {
@@ -871,7 +858,7 @@ async function generateDraftFromRequest() {
   level.generation.generatedImageRef = null;
   saveProject();
   generationPanelOpen = true;
-  activeInspectorTab = 'plan';
+  activeInspectorTab = 'brief';
   isGenerating = true;
   render();
   showStatus('Writing generation request...');

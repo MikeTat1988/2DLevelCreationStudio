@@ -592,6 +592,120 @@ button:disabled {
   font-size: 13px;
 }
 
+.brief-review-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0b1220;
+}
+
+.brief-review-card.is-ready {
+  border-color: rgba(88, 166, 255, .34);
+  background: linear-gradient(180deg, #0d1726 0%, #0b1220 100%);
+}
+
+.brief-state-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.brief-state-row strong {
+  font-size: 13px;
+}
+
+.brief-state-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(31, 111, 235, .2);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.brief-description-box {
+  display: grid;
+  gap: 5px;
+  padding: 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #0d1117;
+}
+
+.brief-description-box strong {
+  font-size: 13px;
+}
+
+.brief-description-box p,
+.brief-review-card > p {
+  line-height: 1.4;
+}
+
+.compact-heading {
+  align-items: center;
+  margin-top: 2px;
+}
+
+.compact-heading h3 {
+  font-size: 12px;
+}
+
+.animatable-review-list {
+  display: grid;
+  gap: 5px;
+  padding: 8px 8px 8px 22px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #0d1117;
+}
+
+.animatable-review-list span {
+  display: block;
+  color: var(--muted-2);
+  font-size: 11px;
+}
+
+.brief-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.file-reference-list {
+  display: grid;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+
+.file-reference-list div {
+  display: grid;
+  gap: 3px;
+  padding: 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: #0d1117;
+}
+
+.file-reference-list strong {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.file-reference-list span {
+  overflow-wrap: anywhere;
+  color: var(--muted-2);
+  font-family: Consolas, Cascadia Mono, monospace;
+  font-size: 11px;
+}
+
 .draft-title-row span {
   display: inline-flex;
   align-items: center;
