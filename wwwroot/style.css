@@ -649,6 +649,11 @@ button:disabled {
   line-height: 1.4;
 }
 
+.brief-description-box small {
+  color: var(--muted-2);
+  font-size: 11px;
+}
+
 .compact-heading {
   align-items: center;
   margin-top: 2px;

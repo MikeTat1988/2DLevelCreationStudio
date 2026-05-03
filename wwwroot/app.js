@@ -314,6 +314,13 @@ function normalizeProject(raw) {
       generation.generatedImageRef = null;
     }
 
+    if (generation.generatedImageRef?.status === 'handoff_ready' && !generation.generatedImageRef.sourceRequest) {
+      generation.generatedImageRef = null;
+      generation.draftPlan = null;
+      generation.approvedPlan = null;
+      generation.assetSlots = [];
+    }
+
     return {
       ...base,
       ...level,
@@ -360,6 +367,39 @@ async function loadInitialProject() {
 
 function saveProject() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+}
+
+function normalizeRequest(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ');
+}
+
+function buildDisplayTitleFromRequest(request) {
+  const cleaned = normalizeRequest(request)
+    .replace(/^generate\s+(me\s+)?(a\s+)?level\s+(that\s+is\s+)?/i, '')
+    .replace(/^about\s+/i, '')
+    .replace(/^(a|an|the)\s+/i, '')
+    .replace(/[.!?]+$/g, '')
+    .trim();
+  if (!cleaned) return 'Level Brief';
+
+  return `${cleaned
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')} Brief`;
+}
+
+function clearGeneratedBriefState(level) {
+  level.generation.approvedPlan = null;
+  level.generation.draftPlan = null;
+  level.generation.summary = '';
+  level.generation.composition = '';
+  level.generation.gameplayPurpose = '';
+  level.generation.safetyCheck = '';
+  level.generation.fullLevelPrompt = '';
+  level.generation.testPrompt = '';
+  level.generation.assetSlots = [];
+  level.generation.generatedImageRef = null;
+  level.objects = [];
 }
 
 function getSelectedLevel() {
@@ -463,6 +503,18 @@ function renderInspector() {
   const hasApproved = Boolean(level.generation.approvedPlan);
   const requestRef = level.generation.generatedImageRef ?? {};
   const hasRequest = Boolean(requestRef.currentRequestPath);
+  const currentRequest = normalizeRequest(level.generation.userRequest);
+  const sourceRequest = normalizeRequest(requestRef.sourceRequest);
+  const isConnectedBrief = hasRequest && hasDraft && sourceRequest && sourceRequest === currentRequest;
+  const visibleBriefTitle = isConnectedBrief
+    ? buildDisplayTitleFromRequest(sourceRequest)
+    : buildDisplayTitleFromRequest(currentRequest);
+  const revisionLabel = requestRef.revision
+    ? `Revision ${requestRef.revision}`
+    : 'No revision yet';
+  const updatedLabel = requestRef.generatedAt
+    ? new Date(requestRef.generatedAt).toLocaleString()
+    : 'Not generated yet';
   if (!['brief', 'tree', 'logic'].includes(activeInspectorTab)) {
     activeInspectorTab = 'brief';
   }
@@ -471,8 +523,10 @@ function renderInspector() {
     .slice(0, 5);
   const briefStatus = hasApproved
     ? 'Level tree is built from the approved plan.'
-    : hasRequest
+    : isConnectedBrief
       ? 'Brief is ready. Open it, review the short image description, then ask Codex to create the image.'
+      : hasRequest
+        ? 'This saved brief belongs to an older request. Regenerate it to refresh the visible state.'
       : 'No active brief yet. Write one sentence and generate a clean handoff brief.';
 
   els.inspector.innerHTML = `
@@ -524,14 +578,15 @@ function renderInspector() {
         </div>
         <div class="brief-review-card ${hasRequest ? 'is-ready' : ''}">
           <div class="brief-state-row">
-            <strong>${hasRequest ? 'Ready for review' : 'Waiting for request'}</strong>
-            <span>${hasApproved ? 'approved' : hasRequest ? 'handoff ready' : 'empty'}</span>
+            <strong>${isConnectedBrief ? 'Ready for review' : hasRequest ? 'Refresh needed' : 'Waiting for request'}</strong>
+            <span>${hasApproved ? 'approved' : isConnectedBrief ? 'handoff ready' : hasRequest ? 'stale' : 'empty'}</span>
           </div>
           <p>${escapeHtml(briefStatus)}</p>
-          ${hasDraft ? `
+          ${isConnectedBrief ? `
             <div class="brief-description-box">
-              <strong>${escapeHtml(level.generation.draftPlan.title)}</strong>
+              <strong>${escapeHtml(visibleBriefTitle)}</strong>
               <p>${escapeHtml(level.generation.draftPlan.intent)}</p>
+              <small>${escapeHtml(revisionLabel)} | ${escapeHtml(updatedLabel)}</small>
             </div>
             <div class="panel-heading-row compact-heading">
               <h3>Animatable Items</h3>
@@ -544,13 +599,13 @@ function renderInspector() {
             </ul>
           ` : `
             <div class="empty-workflow">
-              <strong>No brief generated</strong>
-              <p>Use a short prompt like: generate me a level that is a prison cell.</p>
+              <strong>${hasRequest ? 'Brief is out of sync' : 'No brief generated'}</strong>
+              <p>${escapeHtml(hasRequest ? 'The request text changed or this is old saved data. Click Regenerate brief to write a fresh brief for the current request.' : 'Use a short prompt like: generate me a level that is a prison cell.')}</p>
             </div>
           `}
           <div class="brief-action-row">
             <button type="button" id="openBriefFromCardButton" ${hasRequest ? '' : 'disabled'}>Read brief</button>
-            <button type="button" id="approveGeneratedPlanButton" ${hasDraft ? '' : 'disabled'}>${hasApproved ? 'Rebuild tree' : 'Apply to tree'}</button>
+            <button type="button" id="approveGeneratedPlanButton" ${isConnectedBrief ? '' : 'disabled'}>${hasApproved ? 'Rebuild tree' : 'Apply to tree'}</button>
           </div>
           <details class="internal-brief-details">
             <summary>Files for Codex</summary>
@@ -679,7 +734,18 @@ function bindInspectorControls(level) {
   document.getElementById('openBriefFromCardButton')?.addEventListener('click', openCurrentRequest);
   document.getElementById('approveGeneratedPlanButton')?.addEventListener('click', approveGeneratedPlan);
   document.getElementById('generationUserRequestInput').addEventListener('input', (event) => {
-    level.generation.userRequest = event.target.value;
+    const nextRequest = event.target.value;
+    const previousSourceRequest = normalizeRequest(level.generation.generatedImageRef?.sourceRequest);
+    level.generation.userRequest = nextRequest;
+    if (level.generation.generatedImageRef && (!previousSourceRequest || previousSourceRequest !== normalizeRequest(nextRequest))) {
+      clearGeneratedBriefState(level);
+      level.generation.userRequest = nextRequest;
+      saveProject();
+      render();
+      focusGenerationInput();
+      showStatus('Request changed. Generate a fresh brief.');
+      return;
+    }
     saveProject();
   });
   document.getElementById('generationSummaryInput')?.addEventListener('input', (event) => {
@@ -839,9 +905,11 @@ async function generateDraftFromRequest() {
   if (isGenerating) return;
 
   const level = getSelectedLevel();
-  const request = (level.generation.userRequest || 'generate me a level that is a prison cell').trim();
+  const request = normalizeRequest(level.generation.userRequest || 'generate me a level that is a prison cell');
   const isPrisonCell = /prison|cell|jail|locked/i.test(request);
   const plan = isPrisonCell ? buildPrisonCellPlan(request) : buildGenericRoomPlan(request);
+  plan.sourceRequest = request;
+  plan.createdAt = new Date().toISOString();
   const bridgePrompt = plan.internalBrief;
 
   level.generation.approvedPlan = null;
@@ -875,6 +943,8 @@ async function generateDraftFromRequest() {
       currentRequestPath: result.currentRequestPath,
       planPath: result.planPath,
       currentPlanPath: result.currentPlanPath,
+      sourceRequest: request,
+      generatedAt: plan.createdAt,
       note: 'Generation request written for Codex handoff. Ask Codex to generate from the latest request.'
     };
     saveProject();
@@ -914,7 +984,7 @@ function buildGenerationBriefMarkdown(level, plan) {
     .map((slot) => `- ${slot.name}: ${slot.logicRole}`);
 
   return [
-    `# Image Brief: ${plan.title}`,
+    `# Image Brief: ${buildDisplayTitleFromRequest(plan.sourceRequest || level.generation.userRequest)}`,
     '',
     `Level: ${level.id} / ${level.name}`,
     `Created: ${new Date().toISOString()}`,
@@ -953,11 +1023,13 @@ function buildStructuredPlanJson(level, plan, internalBrief) {
     levelName: level.name,
     createdAt: new Date().toISOString(),
     userRequest: level.generation.userRequest || '',
+    sourceRequest: plan.sourceRequest || level.generation.userRequest || '',
     generalGuidelinesPath: 'C:\\Dev\\2DLevelCreationStudio\\docs\\handoff\\general-image-guidelines.md',
     outputImagePath: `C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${level.id}-current.png`,
     internalBrief,
     plan: {
-      title: plan.title,
+      title: buildDisplayTitleFromRequest(plan.sourceRequest || level.generation.userRequest),
+      internalTemplateTitle: plan.title,
       intent: plan.intent,
       gameplayPurpose: plan.gameplayPurpose,
       safetyCheck: plan.safetyCheck,
@@ -971,7 +1043,7 @@ function buildStructuredPlanJson(level, plan, internalBrief) {
 }
 
 function buildUserFacingImageDescription(plan) {
-  if (plan.title === 'Cozy Puzzle Prison Cell') {
+  if (plan.title === 'Prison Cell Level') {
     return [
       'Create a high-quality hand-painted 2D adventure-game prison cell room. The room should feel cozy and puzzle-like, not scary.',
       '',
@@ -987,7 +1059,12 @@ function buildUserFacingImageDescription(plan) {
 function approveGeneratedPlan() {
   const level = getSelectedLevel();
   if (!level.generation.draftPlan) {
-    showStatus('Generate a draft first');
+    showStatus('Generate a brief first');
+    return;
+  }
+  const sourceRequest = normalizeRequest(level.generation.generatedImageRef?.sourceRequest);
+  if (!sourceRequest || sourceRequest !== normalizeRequest(level.generation.userRequest)) {
+    showStatus('Brief is out of sync. Regenerate it first.');
     return;
   }
 
@@ -1032,13 +1109,13 @@ function buildPrisonCellPlan(request) {
 
   const internalBrief = buildInternalBrief({
     request,
-    title: 'Cozy Puzzle Prison Cell',
+    title: 'Prison Cell Level',
     style: 'warm hand-painted child-safe 2D adventure game room',
     mustPlan: assetSlots
   });
 
   return {
-    title: 'Cozy Puzzle Prison Cell',
+    title: 'Prison Cell Level',
     intent: 'A friendly prison-cell puzzle room where Tom finds a hidden key and opens the locked door.',
     gameplayPurpose: 'Move a cover object, collect a key, try one wrong item, unlock the door, then exit.',
     safetyCheck: 'Friendly puzzle-room mood only. No horror, gore, realistic violence, weapons, drugs, alcohol, or adult themes.',
