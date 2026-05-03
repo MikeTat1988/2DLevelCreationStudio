@@ -201,6 +201,8 @@ const fallbackProject = {
 
 let project = null;
 let selectedLevelId = null;
+let selectedObjectId = null;
+let activeStageDrag = false;
 let generationPanelOpen = false;
 let activeInspectorTab = 'brief';
 let isGenerating = false;
@@ -390,6 +392,75 @@ function buildDisplayTitleFromRequest(request) {
     .join(' ')} Brief`;
 }
 
+function buildBackgroundOnlyPlan(request) {
+  const safeName = normalizeRequest(request) || 'adventure room';
+  const title = `${buildDisplayTitleFromRequest(safeName).replace(/\s*Brief$/, '')} Empty Background`;
+  const baseAssetName = safeName
+    .replace(/^inside\s+of\s+/i, '')
+    .replace(/^a\s+/i, '')
+    .trim() || 'level';
+  const assetSlots = [
+    {
+      id: 'asset_background_clean',
+      objectId: 'obj_background_clean',
+      name: `${baseAssetName} empty background and floor`,
+      layerId: 'background',
+      kind: 'clean_background_plate',
+      movable: false,
+      interactive: false,
+      needsBgRemoval: false,
+      source: 'generated_clean_background',
+      logicRole: 'empty permanent room shell, walls, floor, fixed lighting, no movable props',
+      position: { x: 768, y: 432 },
+      size: { width: 1536, height: 864 },
+      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-background-clean.png',
+      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-background-clean.md'
+    },
+    {
+      id: 'asset_floor_walk_zone',
+      objectId: 'obj_floor_walk_zone',
+      name: 'open walkable floor zone',
+      layerId: 'player',
+      kind: 'walkable_area',
+      movable: false,
+      interactive: false,
+      needsBgRemoval: false,
+      source: 'geometry_from_background',
+      logicRole: 'open navigation area for player and future object placement',
+      position: { x: 768, y: 704 },
+      size: { width: 1120, height: 230 },
+      imagePath: '',
+      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-floor-zone.md'
+    }
+  ];
+  const internalBrief = buildInternalBrief({
+    request,
+    title,
+    style: 'clean empty hand-painted child-safe 2D adventure game background plate',
+    mustPlan: assetSlots,
+    phase: 'background'
+  });
+
+  return {
+    title,
+    phase: 'background',
+    intent: `A clean EMPTY 2D level background plate for: ${safeName}. No gameplay props are included in this first pass; objects are generated later as separate transparent PNGs.`,
+    gameplayPurpose: 'Create only the playable room shell and floor so future objects can be placed on top.',
+    safetyCheck: 'No horror, gore, realistic violence, weapons, drugs, alcohol, adult themes, or threatening imagery.',
+    backgroundItems: ['room shell', 'open floor', 'fixed architecture', 'fixed lighting'],
+    movableItems: [],
+    logicRules: [
+      'background pass contains no movable or collectible props',
+      'future gameplay objects must be generated separately as transparent PNGs',
+      'future objects are positioned on top of this background by coordinates'
+    ],
+    layerPlanText: 'Background: clean empty room shell and open floor only.\nPlayer Space: walkable floor zone.\nForeground layers: empty until the element pass.',
+    internalBrief,
+    assetSlots,
+    logicScript: 'Goal: Background pass only.\nRules:\n- Do not include movable gameplay props in the background.\n- Add interactive objects later as separate transparent PNG elements.'
+  };
+}
+
 function clearGeneratedBriefState(level) {
   level.generation.approvedPlan = null;
   level.generation.draftPlan = null;
@@ -429,6 +500,37 @@ function getCodexResultStatus(level) {
 
 function getSelectedLevel() {
   return project.levels.find((level) => level.id === selectedLevelId) ?? project.levels[0];
+}
+
+function getLayerOrder(level, layerId) {
+  return level.layers.find((layer) => layer.id === layerId)?.order ?? 10;
+}
+
+function toAssetUrl(filePath) {
+  const value = String(filePath ?? '');
+  const marker = 'wwwroot\\';
+  const normalized = value.replaceAll('/', '\\');
+  const index = normalized.toLowerCase().indexOf(marker);
+  if (index >= 0) {
+    return normalized.slice(index + marker.length).replaceAll('\\', '/');
+  }
+  return value;
+}
+
+function isBackgroundPlateObject(object) {
+  return object.layerId === 'background' && (
+    object.kind === 'clean_background_plate' ||
+    object.kind === 'background' ||
+    (object.size?.width ?? 0) >= 1500
+  );
+}
+
+function getStagePoint(event, stage) {
+  const rect = stage.getBoundingClientRect();
+  return {
+    x: Math.round(((event.clientX - rect.left) / rect.width) * 1536),
+    y: Math.round(((event.clientY - rect.top) / rect.height) * 864)
+  };
 }
 
 function renderTreeSection(title, items, renderItem, action) {
@@ -624,10 +726,10 @@ function renderLevelTree(level) {
     ]
       .forEach((item) => {
         const child = document.createElement('div');
-        child.className = 'asset-node';
         const nodeId = item.id ?? item.objectId ?? item.name;
         const imagePath = item.imagePath ?? item.filePath ?? '';
         const promptPath = item.promptPath ?? '';
+        child.className = `asset-node${nodeId === selectedObjectId ? ' is-selected' : ''}`;
         child.innerHTML = `
           <div class="asset-node-main">
             <strong>${escapeHtml(item.name ?? item.id)}</strong>
@@ -807,8 +909,12 @@ function renderStatusButton(level) {
 function renderLevelStage() {
   const level = getSelectedLevel();
   const imageRef = level.generation.generatedImageRef;
+  const backgroundObject = level.objects.find(isBackgroundPlateObject);
+  const backgroundUrl = backgroundObject?.imagePath
+    ? toAssetUrl(backgroundObject.imagePath)
+    : imageRef?.previewUrl;
   const imageSrc = imageRef?.previewUrl
-    ? `${imageRef.previewUrl}?draft=${encodeURIComponent(imageRef.revision ?? 'current')}`
+    ? `${backgroundUrl}?draft=${encodeURIComponent(imageRef.revision ?? 'current')}`
     : 'assets/placeholder-level.svg';
   const imageLabel = imageRef
     ? imageRef.status === 'handoff_ready'
@@ -821,12 +927,120 @@ function renderLevelStage() {
     : 'Level placeholder';
 
   const revisionLabel = imageRef?.revision ? `rev ${String(imageRef.revision).slice(-6)}` : '';
+  const overlayObjects = [...level.objects]
+    .filter((object) => !isBackgroundPlateObject(object))
+    .sort((a, b) => getLayerOrder(level, a.layerId) - getLayerOrder(level, b.layerId));
 
   els.levelStage.innerHTML = `
     <img class="level-placeholder ${imageRef ? 'is-generated' : ''}" src="${escapeHtml(imageSrc)}" alt="${escapeHtml(imageLabel)}">
+    <div class="level-object-layer">
+      ${overlayObjects.map((object) => renderStageObject(level, object)).join('')}
+    </div>
     <div class="level-empty-state">${escapeHtml(imageRef ? imageLabel : 'Ready for objects, layers, and mechanics')}</div>
     ${revisionLabel ? `<div class="level-revision-badge">${escapeHtml(revisionLabel)}</div>` : ''}
   `;
+  bindStageObjectControls();
+}
+
+function renderStageObject(level, object) {
+  const width = Math.max(24, Number(object.size?.width ?? 120));
+  const height = Math.max(24, Number(object.size?.height ?? 90));
+  const x = Number(object.position?.x ?? 768);
+  const y = Number(object.position?.y ?? 432);
+  const left = ((x - width / 2) / 1536) * 100;
+  const top = ((y - height / 2) / 864) * 100;
+  const style = [
+    `left:${left}%`,
+    `top:${top}%`,
+    `width:${(width / 1536) * 100}%`,
+    `height:${(height / 864) * 100}%`,
+    `z-index:${20 + getLayerOrder(level, object.layerId)}`
+  ].join(';');
+  const imageUrl = object.imagePath ? toAssetUrl(object.imagePath) : '';
+  const isZone = object.kind === 'walkable_area' || !imageUrl;
+
+  return `
+    <button type="button" class="stage-object ${isZone ? 'is-zone' : ''} ${object.id === selectedObjectId ? 'is-selected' : ''}" data-object-id="${escapeHtml(object.id)}" style="${style}" title="${escapeHtml(object.id)}">
+      ${isZone
+        ? `<span>${escapeHtml(object.name)}</span>`
+        : `<img src="${escapeHtml(imageUrl)}?object=${encodeURIComponent(object.id)}&rev=${encodeURIComponent(level.generation.generatedImageRef?.revision ?? 'current')}" alt="${escapeHtml(object.name)}">`}
+    </button>
+  `;
+}
+
+function bindStageObjectControls() {
+  document.querySelectorAll('.stage-object').forEach((node) => {
+    node.addEventListener('pointerdown', startStageObjectDrag);
+    node.addEventListener('mousedown', startStageObjectDrag);
+  });
+}
+
+function startStageObjectDrag(event) {
+  event.preventDefault();
+  if (activeStageDrag) return;
+  activeStageDrag = true;
+  const node = event.currentTarget;
+  const level = getSelectedLevel();
+  const object = level.objects.find((item) => item.id === node.dataset.objectId);
+  if (!object) return;
+
+  selectedObjectId = object.id;
+  const stage = els.levelStage;
+  const startPoint = getStagePoint(event, stage);
+  const startPosition = {
+    x: Number(object.position?.x ?? 768),
+    y: Number(object.position?.y ?? 432)
+  };
+  if (event.pointerId !== undefined && node.setPointerCapture) {
+    node.setPointerCapture(event.pointerId);
+  }
+  node.classList.add('is-dragging');
+  renderLevelTree(level);
+
+  const move = (moveEvent) => {
+    const point = getStagePoint(moveEvent, stage);
+    const nextX = startPosition.x + point.x - startPoint.x;
+    const nextY = startPosition.y + point.y - startPoint.y;
+    const halfWidth = Number(object.size?.width ?? 120) / 2;
+    const halfHeight = Number(object.size?.height ?? 90) / 2;
+    object.position = {
+      x: Math.round(Math.min(1536 - halfWidth, Math.max(halfWidth, nextX))),
+      y: Math.round(Math.min(864 - halfHeight, Math.max(halfHeight, nextY)))
+    };
+    updateStageObjectNode(node, object, level);
+  };
+
+  const up = () => {
+    activeStageDrag = false;
+    node.classList.remove('is-dragging');
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    document.removeEventListener('pointercancel', up);
+    document.removeEventListener('mousemove', move);
+    document.removeEventListener('mouseup', up);
+    saveProject();
+    renderLevelStage();
+    renderLevelTree(level);
+    showStatus(`Moved ${object.name}`);
+  };
+
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+  document.addEventListener('mousemove', move);
+  document.addEventListener('mouseup', up);
+}
+
+function updateStageObjectNode(node, object, level) {
+  const width = Math.max(24, Number(object.size?.width ?? 120));
+  const height = Math.max(24, Number(object.size?.height ?? 90));
+  const x = Number(object.position?.x ?? 768);
+  const y = Number(object.position?.y ?? 432);
+  node.style.left = `${((x - width / 2) / 1536) * 100}%`;
+  node.style.top = `${((y - height / 2) / 864) * 100}%`;
+  node.style.width = `${(width / 1536) * 100}%`;
+  node.style.height = `${(height / 864) * 100}%`;
+  node.style.zIndex = String(20 + getLayerOrder(level, object.layerId));
 }
 
 function render() {
@@ -895,9 +1109,7 @@ async function generateDraftFromRequest() {
 
   const level = getSelectedLevel();
   const request = normalizeRequest(level.generation.userRequest || 'generate me a level that is a prison cell');
-  const isPrisonCell = /prison|cell|jail|locked/i.test(request);
-  const isPirateShip = /pirate|ship|below deck|cabin/i.test(request);
-  const plan = isPrisonCell ? buildPrisonCellPlan(request) : isPirateShip ? buildPirateShipPlan(request) : buildGenericRoomPlan(request);
+  const plan = buildBackgroundOnlyPlan(request);
   plan.sourceRequest = request;
   plan.createdAt = new Date().toISOString();
   const bridgePrompt = plan.internalBrief;
@@ -983,7 +1195,7 @@ async function applyCodexResult() {
   const level = getSelectedLevel();
   try {
     const result = await readCurrentGenerationResult(level.id);
-    const planJson = JSON.parse(result.planJson);
+    const planJson = JSON.parse(String(result.planJson || '').replace(/^\uFEFF/, '').trim());
     applyStructuredPlanToLevel(level, planJson, result);
     saveProject();
     activeInspectorTab = 'tree';
@@ -1094,6 +1306,10 @@ function buildGenerationBriefMarkdown(level, plan) {
     '',
     plan.intent,
     '',
+    '## Generation Phase',
+    '',
+    'Background only. Generate an empty level background plate first. Do not generate gameplay props in this pass.',
+    '',
     '## Image Description',
     '',
     buildUserFacingImageDescription(plan),
@@ -1103,7 +1319,7 @@ function buildGenerationBriefMarkdown(level, plan) {
       : []),
     '## Animatable / Separable Items',
     '',
-    ...(animatable.length ? animatable : ['- None planned yet.']),
+    ...(animatable.length ? animatable : ['- None in this background pass. Props will be generated later as separate transparent PNGs.']),
     '',
     '## Save Result Here',
     '',
@@ -1131,6 +1347,7 @@ function buildStructuredPlanJson(level, plan, internalBrief) {
     plan: {
       title: buildDisplayTitleFromRequest(plan.sourceRequest || level.generation.userRequest),
       internalTemplateTitle: plan.title,
+      phase: plan.phase || 'full_level',
       intent: plan.intent,
       gameplayPurpose: plan.gameplayPurpose,
       safetyCheck: plan.safetyCheck,
@@ -1144,6 +1361,16 @@ function buildStructuredPlanJson(level, plan, internalBrief) {
 }
 
 function buildUserFacingImageDescription(plan) {
+  if (plan.phase === 'background') {
+    return [
+      'Create a clean empty 2D adventure-game background plate for this level.',
+      '',
+      'Include only the permanent environment: room shell, walls, floor, fixed lighting, fixed architecture, and open walkable space.',
+      '',
+      'Do not include movable props, collectibles, characters, foreground clutter, puzzle objects, containers, loose furniture, labels, UI, logos, or text. Those will be generated later as separate transparent PNG elements.'
+    ].join('\n');
+  }
+
   if (plan.title === 'Prison Cell Level') {
     return [
       'Create a high-quality hand-painted 2D adventure-game prison cell room. The room should feel cozy and puzzle-like, not scary.',
@@ -1424,11 +1651,16 @@ function buildGenericRoomPlan(request) {
   };
 }
 
-function buildInternalBrief({ request, title, style, mustPlan }) {
+function buildInternalBrief({ request, title, style, mustPlan, phase = 'full_level' }) {
   const notes = getSelectedLevel().generation.planNotes.trim();
   return [
     `User request: "${request}"`,
     ...(notes ? ['', `User level plan notes: ${notes}`] : []),
+    '',
+    `Generation phase: ${phase}`,
+    phase === 'background'
+      ? 'This pass must generate only the clean empty background plate and walkable floor zone. Do not include movable/interactable props.'
+      : 'This pass may include planned level elements.',
     '',
     `Generate: ${title}`,
     `Style: ${style}.`,
@@ -1449,6 +1681,9 @@ function buildInternalBrief({ request, title, style, mustPlan }) {
     '- bg-removal needed flag',
     '- rough bounding boxes in 1536x864 coordinates',
     '- gameplay role and logic binding',
+    ...(phase === 'background'
+      ? ['- only background and walkable floor slots; no prop slots yet']
+      : []),
     '',
     'Planned asset slots:',
     ...mustPlan.map((slot) => `- ${slot.name}: layer=${slot.layerId}, movable=${slot.movable}, bgRemoval=${slot.needsBgRemoval}, role=${slot.logicRole}`)

@@ -19,6 +19,12 @@ http://127.0.0.1:5190/
 
 The studio does not generate images in-browser. It writes a handoff for Codex, Codex generates locally, then the studio applies the result.
 
+Important generation order:
+
+1. First pass is always an EMPTY background plate plus walkable floor zone.
+2. Do not include gameplay props in the first image.
+3. After the user accepts the background in Studio, generate elements as separate transparent PNGs and place them on top.
+
 Always find these three generation inputs first:
 
 ```text

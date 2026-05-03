@@ -67,4 +67,11 @@ The structured elements list must be richer than one generic prop. Every meaning
 
 ## Handoff Contract
 
+Every new level starts with a background pass:
+
+1. Generate only an empty background plate and walkable floor zone.
+2. Do not include movable props, collectibles, puzzle objects, characters, or foreground clutter in the background pass.
+3. Let the user inspect the empty background in Studio.
+4. Only after the background is accepted, generate gameplay elements as separate transparent PNGs and place them on top by coordinates.
+
 The short user-facing brief is for approval. The structured plan is for the app and Codex. If the user rejects/regenerates, overwrite the current brief and current plan. If the user edits the brief, regenerate the plan from the edited brief before proceeding.

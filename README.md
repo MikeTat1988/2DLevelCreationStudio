@@ -33,14 +33,16 @@ C:\Dev\2DLevelCreationStudio\handoff\requests\<level-id>-image-brief-current.md
 C:\Dev\2DLevelCreationStudio\handoff\requests\<level-id>-structured-plan-current.json
 ```
 
-6. Codex reads those three files, generates the image/assets, and saves the current full level image to:
+6. Codex reads those three files and first generates only the empty background plate:
 
 ```text
 C:\Dev\2DLevelCreationStudio\wwwroot\assets\generated\<level-id>-current.png
 ```
 
-7. Codex should also create per-element prompt/image files when the structured plan includes `promptPath` and `imagePath`.
-8. Click `Apply Codex result` in the studio. The app reads the current structured plan and image, refreshes the level image, updates the level tree, and records the generated assets.
+7. Click `Apply Codex result` in the studio. The app reads the current structured plan and image, refreshes the level image, and shows the background plus floor zone.
+8. After the empty background looks right, generate the actual gameplay elements as separate transparent PNGs and place them on top by coordinates.
+
+The first pass should not create treasure chests, crates, keys, books, props, characters, or foreground clutter. It should only create the playable room shell/floor.
 
 If you regenerate, the app overwrites the current brief and current plan for that level. Runtime handoff files and generated images are intentionally gitignored except for directory keepers.
 
