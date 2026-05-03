@@ -25,20 +25,22 @@ The app needs `server.js` for the local Codex handoff flow. A plain static serve
 1. Open the app.
 2. Type a short level idea, for example `generate me a level that is a prison cell`.
 3. Click `Generate draft`.
-4. The app writes the current request to:
+4. The app writes a short current image brief to:
 
 ```text
 C:\Dev\2DLevelCreationStudio\handoff\requests
 ```
 
-5. Ask Codex to generate from the latest request.
-6. Codex saves the image to:
+It also writes a structured plan JSON next to the brief. The user-facing brief is intentionally short; stable rules live in `docs/handoff/general-image-guidelines.md`.
+
+5. Ask Codex to generate from the latest image brief.
+6. Codex reads the general guidelines and structured plan, then saves the image to:
 
 ```text
 C:\Dev\2DLevelCreationStudio\wwwroot\assets\generated\<level-id>-current.png
 ```
 
-The request file includes the internal generation brief, layer plan, asset slots, and logic rules.
+If you regenerate, the app overwrites the current brief and current plan for that level. If you edit the brief, the next generation should use the edited brief and then update the nearby structured plan before proceeding.
 
 ## What It Is
 

@@ -49,7 +49,8 @@ const server = http.createServer(async (req, res) => {
 
 async function handleWriteGenerationRequest(req, res) {
   const body = await readJson(req);
-  const markdown = String(body.markdown || '').trim();
+  const markdown = String(body.markdown || body.briefMarkdown || '').trim();
+  const planJson = body.planJson ?? null;
   const levelId = safeName(String(body.levelId || 'level'));
   if (!markdown) {
     sendJson(res, 400, { error: 'Missing markdown.' });
@@ -59,34 +60,49 @@ async function handleWriteGenerationRequest(req, res) {
   await fsp.mkdir(REQUESTS_DIR, { recursive: true });
   await fsp.mkdir(RESULTS_DIR, { recursive: true });
   const revision = Date.now();
-  const filename = `${levelId}-generation-request-${revision}.md`;
-  const currentFilename = `${levelId}-generation-request-current.md`;
-  const filePath = path.join(REQUESTS_DIR, filename);
-  const currentPath = path.join(REQUESTS_DIR, currentFilename);
+  const briefFilename = `${levelId}-image-brief-${revision}.md`;
+  const currentBriefFilename = `${levelId}-image-brief-current.md`;
+  const planFilename = `${levelId}-structured-plan-${revision}.json`;
+  const currentPlanFilename = `${levelId}-structured-plan-current.json`;
+  const filePath = path.join(REQUESTS_DIR, briefFilename);
+  const currentPath = path.join(REQUESTS_DIR, currentBriefFilename);
+  const planPath = path.join(REQUESTS_DIR, planFilename);
+  const currentPlanPath = path.join(REQUESTS_DIR, currentPlanFilename);
 
   await cleanupRequests(levelId);
   await fsp.writeFile(filePath, markdown, 'utf8');
   await fsp.writeFile(currentPath, markdown, 'utf8');
+  if (planJson !== null) {
+    const planContent = typeof planJson === 'string' ? planJson : JSON.stringify(planJson, null, 2);
+    await fsp.writeFile(planPath, planContent, 'utf8');
+    await fsp.writeFile(currentPlanPath, planContent, 'utf8');
+  }
 
   sendJson(res, 200, {
     requestPath: filePath,
     currentRequestPath: currentPath,
+    planPath: planJson !== null ? planPath : null,
+    currentPlanPath: planJson !== null ? currentPlanPath : null,
     revision,
-    saved: filename
+    saved: briefFilename
   });
 }
 
 async function handleReadCurrentGenerationRequest(req, res) {
   const url = new URL(req.url, `http://${HOST}:${PORT}`);
   const levelId = safeName(url.searchParams.get('levelId') || 'level');
-  const currentPath = path.join(REQUESTS_DIR, `${levelId}-generation-request-current.md`);
+  const currentPath = path.join(REQUESTS_DIR, `${levelId}-image-brief-current.md`);
+  const currentPlanPath = path.join(REQUESTS_DIR, `${levelId}-structured-plan-current.json`);
 
   try {
     const markdown = await fsp.readFile(currentPath, 'utf8');
+    const planJson = await fsp.readFile(currentPlanPath, 'utf8').catch(() => null);
     sendJson(res, 200, {
       levelId,
       path: currentPath,
-      markdown
+      markdown,
+      planPath: planJson ? currentPlanPath : null,
+      planJson
     });
   } catch {
     sendJson(res, 404, {
@@ -99,7 +115,11 @@ async function cleanupRequests(levelId) {
   const entries = await fsp.readdir(REQUESTS_DIR).catch(() => []);
   await Promise.all(
     entries
-      .filter((name) => name.startsWith(`${levelId}-generation-request-`) && name.endsWith('.md'))
+      .filter((name) =>
+        (name.startsWith(`${levelId}-image-brief-`) && name.endsWith('.md')) ||
+        (name.startsWith(`${levelId}-structured-plan-`) && name.endsWith('.json')) ||
+        (name.startsWith(`${levelId}-generation-request-`) && name.endsWith('.md'))
+      )
       .map((name) => fsp.rm(path.join(REQUESTS_DIR, name), { force: true }))
   );
 }

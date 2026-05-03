@@ -226,6 +226,7 @@ const els = {
   cancelRenameButton: document.getElementById('cancelRenameButton'),
   requestDialog: document.getElementById('requestDialog'),
   requestDialogPath: document.getElementById('requestDialogPath'),
+  requestPlanPath: document.getElementById('requestPlanPath'),
   requestMarkdownView: document.getElementById('requestMarkdownView'),
   closeRequestButton: document.getElementById('closeRequestButton'),
   startGameButton: document.getElementById('startGameButton')
@@ -876,14 +877,17 @@ async function generateDraftFromRequest() {
   showStatus('Writing generation request...');
 
   try {
-    const markdown = buildGenerationRequestMarkdown(level, plan, bridgePrompt);
-    const result = await writeGenerationRequest(level.id, markdown);
+    const markdown = buildGenerationBriefMarkdown(level, plan);
+    const planJson = buildStructuredPlanJson(level, plan, bridgePrompt);
+    const result = await writeGenerationRequest(level.id, markdown, planJson);
     level.generation.generatedImageRef = {
       status: 'handoff_ready',
       previewUrl: null,
       revision: result.revision,
       requestPath: result.requestPath,
       currentRequestPath: result.currentRequestPath,
+      planPath: result.planPath,
+      currentPlanPath: result.currentPlanPath,
       note: 'Generation request written for Codex handoff. Ask Codex to generate from the latest request.'
     };
     saveProject();
@@ -898,11 +902,11 @@ async function generateDraftFromRequest() {
   }
 }
 
-async function writeGenerationRequest(levelId, markdown) {
+async function writeGenerationRequest(levelId, markdown, planJson) {
   const response = await fetch('/api/write-generation-request', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ levelId, markdown })
+    body: JSON.stringify({ levelId, briefMarkdown: markdown, planJson })
   });
 
   const payload = await response.json().catch(() => ({}));
@@ -917,9 +921,13 @@ async function writeGenerationRequest(levelId, markdown) {
   return payload;
 }
 
-function buildGenerationRequestMarkdown(level, plan, internalBrief) {
+function buildGenerationBriefMarkdown(level, plan) {
+  const animatable = plan.assetSlots
+    .filter((slot) => slot.movable || slot.needsBgRemoval)
+    .map((slot) => `- ${slot.name}: ${slot.logicRole}`);
+
   return [
-    `# Generation Request: ${plan.title}`,
+    `# Image Brief: ${plan.title}`,
     '',
     `Level: ${level.id} / ${level.name}`,
     `Created: ${new Date().toISOString()}`,
@@ -928,41 +936,65 @@ function buildGenerationRequestMarkdown(level, plan, internalBrief) {
     '',
     level.generation.userRequest || 'generate me a level',
     '',
-    '## What Codex Should Produce',
+    '## Image To Create',
     '',
-    '1. Generate a high-quality 2D adventure level image matching the request and internal brief.',
-    '2. Save the image to:',
+    plan.intent,
+    '',
+    '## Image Description',
+    '',
+    buildUserFacingImageDescription(plan),
+    '',
+    '## Animatable / Separable Items',
+    '',
+    ...(animatable.length ? animatable : ['- None planned yet.']),
+    '',
+    '## Save Result Here',
     '',
     '```text',
     `C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${level.id}-current.png`,
     '```',
     '',
-    '3. Do not create extra draft garbage. Replace the current image for this level.',
-    '4. Keep the visual quality comparable to the supplied reference style when relevant.',
-    '5. Preserve the structured plan below; do not re-infer the scene from the image unless explicitly asked.',
+    '## Review Note',
     '',
-    '## Internal Brief',
-    '',
-    '```text',
+    'This file is intentionally short for user approval. General generation rules live in `docs/handoff/general-image-guidelines.md`. The structured plan is stored next to this brief as JSON.'
+  ].join('\n');
+}
+
+function buildStructuredPlanJson(level, plan, internalBrief) {
+  return {
+    levelId: level.id,
+    levelName: level.name,
+    createdAt: new Date().toISOString(),
+    userRequest: level.generation.userRequest || '',
+    generalGuidelinesPath: 'C:\\Dev\\2DLevelCreationStudio\\docs\\handoff\\general-image-guidelines.md',
+    outputImagePath: `C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${level.id}-current.png`,
     internalBrief,
-    '```',
-    '',
-    '## Draft Structured Plan',
-    '',
-    JSON.stringify({
+    plan: {
       title: plan.title,
       intent: plan.intent,
       gameplayPurpose: plan.gameplayPurpose,
       safetyCheck: plan.safetyCheck,
-      layers: plan.layerPlanText,
-      assetSlots: plan.assetSlots,
-      logicRules: plan.logicRules
-    }, null, 2),
-    '',
-    '## After Saving The Image',
-    '',
-    'Tell the user the image path. The app should then use that path as the current generated level image.'
-  ].join('\n');
+      layerPlanText: plan.layerPlanText,
+      backgroundItems: plan.backgroundItems,
+      movableItems: plan.movableItems,
+      logicRules: plan.logicRules,
+      assetSlots: plan.assetSlots
+    }
+  };
+}
+
+function buildUserFacingImageDescription(plan) {
+  if (plan.title === 'Cozy Puzzle Prison Cell') {
+    return [
+      'Create a high-quality hand-painted 2D adventure-game prison cell room. The room should feel cozy and puzzle-like, not scary.',
+      '',
+      'The scene has a stone frame, beige plaster walls with green lower paint, tiled floor, a blue locked door on the left, a small barred window on the right with sunlight, a metal bed with pillow and folded blanket, a wooden crate, a broom, wall shelves with books/plants, and a warm hanging lamp.',
+      '',
+      'The image should look polished and usable as a game level background, comparable in quality to the supplied cell-room reference.'
+    ].join('\n');
+  }
+
+  return plan.intent;
 }
 
 function approveGeneratedPlan() {
@@ -1326,7 +1358,8 @@ async function openCurrentRequest() {
       throw new Error(payload.error || `Could not read request (${response.status})`);
     }
 
-    els.requestDialogPath.textContent = payload.path;
+    els.requestDialogPath.textContent = `Brief: ${payload.path}`;
+    els.requestPlanPath.textContent = payload.planPath ? `Plan: ${payload.planPath}` : 'Plan: not written yet';
     els.requestMarkdownView.textContent = payload.markdown;
     els.requestDialog.hidden = false;
   } catch (error) {
