@@ -672,6 +672,13 @@ button:disabled {
   font-size: 11px;
 }
 
+.level-actions-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin: 8px 0;
+}
+
 .brief-review-card.is-ready {
   border-color: rgba(88, 166, 255, .34);
   background: linear-gradient(180deg, #0d1726 0%, #0b1220 100%);
@@ -991,26 +998,12 @@ button:disabled {
 }
 
 .asset-node-main {
-  display: grid;
-  gap: 2px;
+  display: block;
 }
 
 .asset-node-main strong {
   color: var(--ink);
   font-size: 12px;
-}
-
-.asset-node-main span,
-.asset-node-meta small {
-  overflow-wrap: anywhere;
-  color: var(--muted-2);
-  font-family: Consolas, Cascadia Mono, monospace;
-  font-size: 10px;
-}
-
-.asset-node-meta {
-  display: grid;
-  gap: 2px;
 }
 
 .asset-node-actions {

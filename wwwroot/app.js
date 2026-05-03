@@ -393,6 +393,8 @@ function buildDisplayTitleFromRequest(request) {
 }
 
 function buildBackgroundOnlyPlan(request) {
+  const level = getSelectedLevel();
+  const levelId = level.id;
   const safeName = normalizeRequest(request) || 'adventure room';
   const title = `${buildDisplayTitleFromRequest(safeName).replace(/\s*Brief$/, '')} Empty Background`;
   const baseAssetName = safeName
@@ -413,8 +415,8 @@ function buildBackgroundOnlyPlan(request) {
       logicRole: 'empty permanent room shell, walls, floor, fixed lighting, no movable props',
       position: { x: 768, y: 432 },
       size: { width: 1536, height: 864 },
-      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-background-clean.png',
-      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-background-clean.md'
+      imagePath: `C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${levelId}-background-clean.png`,
+      promptPath: `C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\${levelId}-background-clean.md`
     },
     {
       id: 'asset_floor_walk_zone',
@@ -428,9 +430,9 @@ function buildBackgroundOnlyPlan(request) {
       source: 'geometry_from_background',
       logicRole: 'open navigation area for player and future object placement',
       position: { x: 768, y: 704 },
-      size: { width: 1120, height: 230 },
+      size: { width: 1504, height: 250 },
       imagePath: '',
-      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-floor-zone.md'
+      promptPath: `C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\${levelId}-floor-zone.md`
     }
   ];
   const internalBrief = buildInternalBrief({
@@ -475,29 +477,6 @@ function clearGeneratedBriefState(level) {
   level.objects = [];
 }
 
-function getCodexResultStatus(level) {
-  const imageRef = level.generation.generatedImageRef;
-  if (imageRef?.status === 'applied') {
-    return {
-      label: 'Applied to Studio',
-      tone: 'done',
-      detail: `Image and ${level.objects.length} tree nodes are active in the level.`
-    };
-  }
-  if (imageRef?.status === 'handoff_ready') {
-    return {
-      label: 'Waiting for Codex',
-      tone: 'ready',
-      detail: 'Brief is ready. Generate in Codex, then apply the result here.'
-    };
-  }
-  return {
-    label: 'Prompt first',
-    tone: 'empty',
-    detail: 'Write a prompt, optionally add plan notes, then prepare the Codex handoff.'
-  };
-}
-
 function getSelectedLevel() {
   return project.levels.find((level) => level.id === selectedLevelId) ?? project.levels[0];
 }
@@ -531,6 +510,10 @@ function getStagePoint(event, stage) {
     x: Math.round(((event.clientX - rect.left) / rect.width) * 1536),
     y: Math.round(((event.clientY - rect.top) / rect.height) * 864)
   };
+}
+
+function getCurrentLevelAssetsDirectory() {
+  return 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated';
 }
 
 function renderTreeSection(title, items, renderItem, action) {
@@ -631,14 +614,6 @@ function renderInspector() {
   const currentRequest = normalizeRequest(level.generation.userRequest);
   const sourceRequest = normalizeRequest(requestRef.sourceRequest);
   const isConnectedBrief = hasRequest && sourceRequest && sourceRequest === currentRequest;
-  const resultStatus = getCodexResultStatus(level);
-  const visibleBriefTitle = buildDisplayTitleFromRequest(isConnectedBrief ? sourceRequest : currentRequest);
-  const revisionLabel = requestRef.revision
-    ? `Revision ${requestRef.revision}`
-    : 'No revision yet';
-  const updatedLabel = requestRef.generatedAt
-    ? new Date(requestRef.generatedAt).toLocaleString()
-    : 'Not generated yet';
   if (!['brief', 'tree', 'logic'].includes(activeInspectorTab)) {
     activeInspectorTab = 'brief';
   }
@@ -657,21 +632,14 @@ function renderInspector() {
       <label class="prompt-box-label" for="generationPlanNotesInput">Optional level plan</label>
       <textarea id="generationPlanNotesInput" class="short-request-input plan-notes-input" placeholder="Optional: key puzzle, main movable prop, exit rule, mood">${escapeHtml(level.generation.planNotes)}</textarea>
       <div class="primary-action-row">
-        <button type="button" id="generateFromRequestButton" class="primary-action" ${isGenerating ? 'disabled' : ''}>${isGenerating ? 'Writing...' : hasRequest ? 'Refresh handoff' : 'Prepare handoff'}</button>
-        <button type="button" id="openCurrentRequestButton" ${hasRequest ? '' : 'disabled'}>Open handoff</button>
+        <button type="button" id="generateFromRequestButton" class="primary-action" ${isGenerating ? 'disabled' : ''}>${isGenerating ? 'Writing...' : hasRequest ? 'Regenerate background' : 'Generate background'}</button>
+        <button type="button" id="openCurrentRequestButton" ${hasRequest ? '' : 'disabled'}>Open prompt</button>
       </div>
     </details>
 
-    <div class="codex-result-card is-${escapeHtml(resultStatus.tone)}">
-      <div class="brief-state-row">
-        <strong>${escapeHtml(resultStatus.label)}</strong>
-        <span>${escapeHtml(requestRef.status ?? 'idle')}</span>
-      </div>
-      <small>${escapeHtml(hasRequest ? `${visibleBriefTitle} | ${revisionLabel} | ${updatedLabel}` : resultStatus.detail)}</small>
-      <div class="primary-action-row">
-        <button type="button" id="applyCodexResultButton" ${hasRequest ? '' : 'disabled'}>Apply Codex result</button>
-        <button type="button" id="openBriefFromCardButton" ${hasRequest ? '' : 'disabled'}>Read files</button>
-      </div>
+    <div class="level-actions-row">
+      <button type="button" id="applyCodexResultButton" ${hasRequest ? '' : 'disabled'}>Refresh from files</button>
+      <button type="button" id="openLevelAssetsButton">Open level assets</button>
     </div>
 
     <div class="hidden-field-store">
@@ -685,7 +653,7 @@ function renderInspector() {
 
     <section class="tree-workspace-card">
       <div class="panel-heading-row">
-        <h3>Element Tree</h3>
+        <h3>Level Layers</h3>
         <button type="button" class="help-icon" title="Each node has an id for Codex edits, a generated image path, and a prompt path.">?</button>
       </div>
       <div id="levelTree" class="level-tree-panel"></div>
@@ -733,11 +701,6 @@ function renderLevelTree(level) {
         child.innerHTML = `
           <div class="asset-node-main">
             <strong>${escapeHtml(item.name ?? item.id)}</strong>
-            <span>${escapeHtml(nodeId)} | ${escapeHtml(item.kind ?? item.nodeType)}</span>
-          </div>
-          <div class="asset-node-meta">
-            ${imagePath ? `<small>image: ${escapeHtml(imagePath)}</small>` : ''}
-            ${promptPath ? `<small>prompt: ${escapeHtml(promptPath)}</small>` : ''}
           </div>
           <div class="asset-node-actions">
             <button type="button" class="copy-node-id" data-node-id="${escapeHtml(nodeId)}">Copy id</button>
@@ -789,24 +752,16 @@ function bindInspectorControls(level) {
 
   document.querySelectorAll('.reveal-node-path').forEach((button) => {
     button.addEventListener('click', async () => {
-      try {
-        const response = await fetch('/api/reveal-path', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: button.dataset.path })
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload.error || 'Reveal failed');
-        showStatus('Opened in Explorer');
-      } catch (error) {
-        showStatus(error.message || 'Reveal failed');
-      }
+      revealPath(button.dataset.path);
     });
+  });
+
+  document.getElementById('openLevelAssetsButton')?.addEventListener('click', () => {
+    revealPath(getCurrentLevelAssetsDirectory());
   });
 
   document.getElementById('generateFromRequestButton').addEventListener('click', generateDraftFromRequest);
   document.getElementById('openCurrentRequestButton').addEventListener('click', openCurrentRequest);
-  document.getElementById('openBriefFromCardButton')?.addEventListener('click', openCurrentRequest);
   document.getElementById('applyCodexResultButton')?.addEventListener('click', applyCodexResult);
   document.getElementById('generationUserRequestInput').addEventListener('input', (event) => {
     const nextRequest = event.target.value;
@@ -872,6 +827,21 @@ function bindInspectorControls(level) {
   document.getElementById('openAssetsDirectoryButton')?.addEventListener('click', () => {
     showStatus('Browser security blocks opening local directories directly. Use C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets for now.');
   });
+}
+
+async function revealPath(path) {
+  try {
+    const response = await fetch('/api/reveal-path', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'Reveal failed');
+    showStatus('Opened in Explorer');
+  } catch (error) {
+    showStatus(error.message || 'Reveal failed');
+  }
 }
 
 function populateLevelSelect(select) {
@@ -1200,9 +1170,9 @@ async function applyCodexResult() {
     saveProject();
     activeInspectorTab = 'tree';
     render();
-    showStatus('Codex result applied to Studio');
+    showStatus('Level refreshed from files');
   } catch (error) {
-    showStatus(error.message || 'Could not apply Codex result');
+    showStatus(error.message || 'Could not refresh level files');
   }
 }
 
@@ -1671,6 +1641,7 @@ function buildInternalBrief({ request, title, style, mustPlan, phase = 'full_lev
     '- Do not require a later image-analysis pass to discover objects.',
     '- Keep all movable/interactive elements visually separable from the background.',
     '- Target canvas: 1536x864, 16:9 side-view room.',
+    '- For background passes, keep the playable walking floor as wide as possible: about 1504px wide, centered, with only about 16px side margins so character animations do not clip against the room edges.',
     '- Output must be child-safe and readable for point-and-click gameplay.',
     '',
     'Return together with the generated image:',
