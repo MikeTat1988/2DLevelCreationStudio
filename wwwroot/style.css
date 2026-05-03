@@ -436,6 +436,41 @@ p {
   gap: 8px;
 }
 
+.drawer-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.drawer-summary::-webkit-details-marker {
+  display: none;
+}
+
+.drawer-summary h2 {
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+
+.drawer-summary p {
+  max-width: 260px;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generation-drawer:not([open]) {
+  padding-bottom: 10px;
+}
+
+.tree-workspace-card {
+  display: grid;
+  gap: 8px;
+}
+
 .card-title-row h2 {
   font-size: 14px;
   margin-bottom: 3px;
@@ -629,6 +664,12 @@ button:disabled {
 
 .codex-result-card.is-empty {
   border-style: dashed;
+}
+
+.codex-result-card > small {
+  overflow-wrap: anywhere;
+  color: var(--muted-2);
+  font-size: 11px;
 }
 
 .brief-review-card.is-ready {
@@ -879,11 +920,48 @@ button:disabled {
 }
 
 .asset-node {
+  display: grid;
+  gap: 6px;
   min-height: 28px;
-  justify-content: flex-start;
+  padding: 8px;
   text-align: left;
   background: #101826;
   color: var(--muted);
+}
+
+.asset-node-main {
+  display: grid;
+  gap: 2px;
+}
+
+.asset-node-main strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.asset-node-main span,
+.asset-node-meta small {
+  overflow-wrap: anywhere;
+  color: var(--muted-2);
+  font-family: Consolas, Cascadia Mono, monospace;
+  font-size: 10px;
+}
+
+.asset-node-meta {
+  display: grid;
+  gap: 2px;
+}
+
+.asset-node-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.asset-node-actions button {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 10px;
 }
 
 .layer-empty,

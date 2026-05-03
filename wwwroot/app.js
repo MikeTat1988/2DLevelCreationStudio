@@ -542,14 +542,14 @@ function renderInspector() {
   }
 
   els.inspector.innerHTML = `
-    <section class="create-level-card">
-      <div class="card-title-row">
+    <details class="create-level-card generation-drawer" ${hasRequest ? '' : 'open'}>
+      <summary class="drawer-summary">
         <div>
-          <h2>Codex Level Request</h2>
-          <p>One prompt is enough. Add plan notes only when you want to steer puzzle logic.</p>
+          <h2>Generation Prompt</h2>
+          <p>${escapeHtml(level.generation.userRequest || 'Write a prompt')}</p>
         </div>
         <button type="button" class="help-icon" title="Studio writes the brief and structured elements list. Codex generates the image/assets outside the browser, then Studio applies the result.">?</button>
-      </div>
+      </summary>
       <label class="prompt-box-label" for="generationUserRequestInput">Level idea</label>
       <textarea id="generationUserRequestInput" class="short-request-input" placeholder="Inside of a pirate ship">${escapeHtml(level.generation.userRequest)}</textarea>
       <label class="prompt-box-label" for="generationPlanNotesInput">Optional level plan</label>
@@ -558,87 +558,41 @@ function renderInspector() {
         <button type="button" id="generateFromRequestButton" class="primary-action" ${isGenerating ? 'disabled' : ''}>${isGenerating ? 'Writing...' : hasRequest ? 'Refresh handoff' : 'Prepare handoff'}</button>
         <button type="button" id="openCurrentRequestButton" ${hasRequest ? '' : 'disabled'}>Open handoff</button>
       </div>
-    </section>
+    </details>
 
     <div class="codex-result-card is-${escapeHtml(resultStatus.tone)}">
       <div class="brief-state-row">
         <strong>${escapeHtml(resultStatus.label)}</strong>
         <span>${escapeHtml(requestRef.status ?? 'idle')}</span>
       </div>
-      <p>${escapeHtml(resultStatus.detail)}</p>
-      ${hasRequest ? `
-        <div class="brief-description-box">
-          <strong>${escapeHtml(visibleBriefTitle)}</strong>
-          <p>${escapeHtml(isConnectedBrief ? (level.generation.summary || 'Handoff matches the current prompt.') : 'Prompt changed. Refresh the handoff before asking Codex to generate.')}</p>
-          <small>${escapeHtml(revisionLabel)} | ${escapeHtml(updatedLabel)}</small>
-        </div>
-      ` : ''}
+      <small>${escapeHtml(hasRequest ? `${visibleBriefTitle} | ${revisionLabel} | ${updatedLabel}` : resultStatus.detail)}</small>
       <div class="primary-action-row">
         <button type="button" id="applyCodexResultButton" ${hasRequest ? '' : 'disabled'}>Apply Codex result</button>
         <button type="button" id="openBriefFromCardButton" ${hasRequest ? '' : 'disabled'}>Read files</button>
       </div>
-      <details class="internal-brief-details">
-        <summary>File locations</summary>
-        <div class="file-reference-list">
-          <div><strong>General rules</strong><span>C:\\Dev\\2DLevelCreationStudio\\docs\\handoff\\general-image-guidelines.md</span></div>
-          <div><strong>Generation brief</strong><span>${escapeHtml(requestRef.currentRequestPath ?? 'not written yet')}</span></div>
-          <div><strong>Elements list</strong><span>${escapeHtml(requestRef.currentPlanPath ?? 'not written yet')}</span></div>
-          <div><strong>Generated image</strong><span>C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${escapeHtml(level.id)}-current.png</span></div>
-        </div>
-      </details>
     </div>
 
-    <nav class="inspector-tabs" aria-label="Right panel tabs">
-      <button type="button" data-tab="brief" class="${activeInspectorTab === 'brief' ? 'is-active' : ''}">Project</button>
-      <button type="button" data-tab="tree" class="${activeInspectorTab === 'tree' ? 'is-active' : ''}">Tree</button>
-      <button type="button" data-tab="logic" class="${activeInspectorTab === 'logic' ? 'is-active' : ''}">Logic</button>
-    </nav>
-
-    <div class="tab-panels">
-      <section class="tab-panel ${activeInspectorTab === 'brief' ? 'is-active' : ''}" id="tabBrief">
-        <div class="project-summary-details project-summary-body">
-          <div class="hidden-field-store">
-            <textarea id="generationSummaryInput">${escapeHtml(level.generation.summary)}</textarea>
-            <textarea id="generationCompositionInput">${escapeHtml(level.generation.composition)}</textarea>
-            <textarea id="generationPromptInput">${escapeHtml(level.generation.fullLevelPrompt)}</textarea>
-            <textarea id="testPromptInput">${escapeHtml(level.generation.testPrompt)}</textarea>
-          </div>
-          <div class="field">
-            <label for="gameTitleInput">Game title</label>
-            <input id="gameTitleInput" value="${escapeHtml(project.game.title)}">
-          </div>
-          <div class="field">
-            <label for="gameNotesInput">Game notes</label>
-            <textarea id="gameNotesInput">${escapeHtml(project.game.notes)}</textarea>
-          </div>
-          <button type="button" id="openAssetsDirectoryButton">Show Assets Directory</button>
-          <div class="summary-list">
-            <div class="summary-row"><strong>Project id</strong><span>${escapeHtml(project.game.id)}</span></div>
-            <div class="summary-row"><strong>Selected level id</strong><span>${escapeHtml(level.id)}</span></div>
-            <div class="summary-row"><strong>Objects in tree</strong><span>${level.objects.length}</span></div>
-            <div class="summary-row"><strong>Levels</strong><span>${project.levels.length}</span></div>
-            <div class="summary-row"><strong>Characters</strong><span>${project.characters.length}</span></div>
-            <div class="summary-row"><strong>Assets</strong><span>${project.assets.length}</span></div>
-          </div>
-        </div>
-      </section>
-
-      <section class="tab-panel ${activeInspectorTab === 'tree' ? 'is-active' : ''}" id="tabTree">
-        <div class="panel-heading-row">
-          <h3>Level Tree</h3>
-          <button type="button" class="help-icon" title="Right-click an object later to send a focused edit request with only that object, its layer, and relevant logic.">?</button>
-        </div>
-        <div id="levelTree" class="level-tree-panel"></div>
-      </section>
-
-      <section class="tab-panel ${activeInspectorTab === 'logic' ? 'is-active' : ''}" id="tabLogic">
-        <div class="panel-heading-row">
-          <h3>Level Logic</h3>
-          <button type="button" class="help-icon" title="Readable puzzle pseudocode. This describes what must happen, before it becomes mechanics bindings.">?</button>
-        </div>
-        <textarea id="logicScriptInput" class="logic-editor">${escapeHtml(level.logicScript)}</textarea>
-      </section>
+    <div class="hidden-field-store">
+      <textarea id="generationSummaryInput">${escapeHtml(level.generation.summary)}</textarea>
+      <textarea id="generationCompositionInput">${escapeHtml(level.generation.composition)}</textarea>
+      <textarea id="generationPromptInput">${escapeHtml(level.generation.fullLevelPrompt)}</textarea>
+      <textarea id="testPromptInput">${escapeHtml(level.generation.testPrompt)}</textarea>
+      <input id="gameTitleInput" value="${escapeHtml(project.game.title)}">
+      <textarea id="gameNotesInput">${escapeHtml(project.game.notes)}</textarea>
     </div>
+
+    <section class="tree-workspace-card">
+      <div class="panel-heading-row">
+        <h3>Element Tree</h3>
+        <button type="button" class="help-icon" title="Each node has an id for Codex edits, a generated image path, and a prompt path.">?</button>
+      </div>
+      <div id="levelTree" class="level-tree-panel"></div>
+    </section>
+
+    <details class="internal-brief-details compact-logic">
+      <summary>Level logic</summary>
+      <textarea id="logicScriptInput" class="logic-editor">${escapeHtml(level.logicScript)}</textarea>
+    </details>
   `;
 
   renderLevelTree(level);
@@ -669,14 +623,30 @@ function renderLevelTree(level) {
       ...characters.map((item) => ({ ...item, nodeType: 'character' }))
     ]
       .forEach((item) => {
-        const child = document.createElement('button');
-        child.type = 'button';
+        const child = document.createElement('div');
         child.className = 'asset-node';
-        child.textContent = `${item.nodeType}: ${item.name ?? item.id}`;
+        const nodeId = item.id ?? item.objectId ?? item.name;
+        const imagePath = item.imagePath ?? item.filePath ?? '';
+        const promptPath = item.promptPath ?? '';
+        child.innerHTML = `
+          <div class="asset-node-main">
+            <strong>${escapeHtml(item.name ?? item.id)}</strong>
+            <span>${escapeHtml(nodeId)} | ${escapeHtml(item.kind ?? item.nodeType)}</span>
+          </div>
+          <div class="asset-node-meta">
+            ${imagePath ? `<small>image: ${escapeHtml(imagePath)}</small>` : ''}
+            ${promptPath ? `<small>prompt: ${escapeHtml(promptPath)}</small>` : ''}
+          </div>
+          <div class="asset-node-actions">
+            <button type="button" class="copy-node-id" data-node-id="${escapeHtml(nodeId)}">Copy id</button>
+            ${imagePath ? `<button type="button" class="reveal-node-path" data-path="${escapeHtml(imagePath)}">Reveal image</button>` : ''}
+            ${promptPath ? `<button type="button" class="reveal-node-path" data-path="${escapeHtml(promptPath)}">Reveal prompt</button>` : ''}
+          </div>
+        `;
         child.title = 'Future: right-click to create a focused Codex edit request for only this node and its direct context.';
         child.addEventListener('contextmenu', (event) => {
           event.preventDefault();
-          showStatus(`Future Codex edit: ${item.name ?? item.id}. Context will be scoped to this node, its layer, level id, and relevant mechanics only.`);
+          showStatus(`Codex edit id: ${nodeId}. Use this id in chat for focused edits.`);
         });
         children.append(child);
       });
@@ -702,6 +672,34 @@ function bindInspectorControls(level) {
 
   document.querySelectorAll('.section-disclosure').forEach((button) => {
     button.addEventListener('click', () => document.getElementById(button.dataset.toggle).classList.toggle('collapsed'));
+  });
+
+  document.querySelectorAll('.copy-node-id').forEach((button) => {
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(button.dataset.nodeId);
+        showStatus(`Copied id: ${button.dataset.nodeId}`);
+      } catch {
+        showStatus(`Node id: ${button.dataset.nodeId}`);
+      }
+    });
+  });
+
+  document.querySelectorAll('.reveal-node-path').forEach((button) => {
+    button.addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/reveal-path', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: button.dataset.path })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'Reveal failed');
+        showStatus('Opened in Explorer');
+      } catch (error) {
+        showStatus(error.message || 'Reveal failed');
+      }
+    });
   });
 
   document.getElementById('generateFromRequestButton').addEventListener('click', generateDraftFromRequest);
@@ -898,7 +896,8 @@ async function generateDraftFromRequest() {
   const level = getSelectedLevel();
   const request = normalizeRequest(level.generation.userRequest || 'generate me a level that is a prison cell');
   const isPrisonCell = /prison|cell|jail|locked/i.test(request);
-  const plan = isPrisonCell ? buildPrisonCellPlan(request) : buildGenericRoomPlan(request);
+  const isPirateShip = /pirate|ship|below deck|cabin/i.test(request);
+  const plan = isPrisonCell ? buildPrisonCellPlan(request) : isPirateShip ? buildPirateShipPlan(request) : buildGenericRoomPlan(request);
   plan.sourceRequest = request;
   plan.createdAt = new Date().toISOString();
   const bridgePrompt = plan.internalBrief;
@@ -1039,6 +1038,7 @@ function applyStructuredPlanToLevel(level, planJson, result) {
     id: slot.objectId || slot.id,
     name: slot.name || slot.id,
     layerId: slot.layerId || 'foreground_1',
+    kind: slot.kind || 'object',
     position: slot.position || { x: 768, y: 432 },
     size: slot.size || { width: 160, height: 100 },
     interactive: Boolean(slot.interactive),
@@ -1046,6 +1046,8 @@ function applyStructuredPlanToLevel(level, planJson, result) {
     movable: Boolean(slot.movable),
     occludesPlayer: slot.occludesPlayer ?? 'none',
     assetRef: slot.id,
+    imagePath: slot.imagePath || '',
+    promptPath: slot.promptPath || '',
     notes: slot.logicRole || ''
   }));
 
@@ -1236,6 +1238,133 @@ function buildPrisonCellPlan(request) {
     internalBrief,
     assetSlots,
     logicScript: cellRoomLogicScript
+  };
+}
+
+function buildPirateShipPlan(request) {
+  const assetSlots = [
+    {
+      id: 'asset_background_clean',
+      objectId: 'obj_background_clean',
+      name: 'clean pirate ship room and floor',
+      layerId: 'background',
+      kind: 'clean_background_plate',
+      movable: false,
+      interactive: false,
+      needsBgRemoval: false,
+      source: 'generated_clean_background',
+      logicRole: 'permanent ship interior, walls, beams, portholes, floor, lighting, no movable foreground duplicates',
+      position: { x: 768, y: 432 },
+      size: { width: 1536, height: 864 },
+      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-background-clean.png',
+      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-background-clean.md'
+    },
+    {
+      id: 'asset_wall_map_desk',
+      objectId: 'obj_wall_map_desk',
+      name: 'fixed wall map and captain desk',
+      layerId: 'background_objects',
+      kind: 'fixed_wall_story_prop',
+      movable: false,
+      interactive: true,
+      needsBgRemoval: false,
+      source: 'baked_or_optional_cutout',
+      logicRole: 'inspectable clue area attached to the back wall',
+      position: { x: 760, y: 415 },
+      size: { width: 430, height: 250 },
+      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-wall-map-desk.png',
+      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-wall-map-desk.md'
+    },
+    {
+      id: 'asset_floor_walk_zone',
+      objectId: 'obj_floor_walk_zone',
+      name: 'walkable wooden floor zone',
+      layerId: 'player',
+      kind: 'walkable_area',
+      movable: false,
+      interactive: false,
+      needsBgRemoval: false,
+      source: 'geometry_from_background',
+      logicRole: 'main player navigation area',
+      position: { x: 780, y: 695 },
+      size: { width: 1100, height: 250 },
+      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-floor-zone.png',
+      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-floor-zone.md'
+    },
+    {
+      id: 'asset_treasure_chest',
+      objectId: 'obj_treasure_chest',
+      name: 'movable treasure chest',
+      layerId: 'foreground_1',
+      kind: 'movable_prop',
+      movable: true,
+      interactive: true,
+      needsBgRemoval: true,
+      source: 'transparent_png_cutout',
+      logicRole: 'primary puzzle interaction, opens or moves to reveal clue',
+      position: { x: 725, y: 650 },
+      size: { width: 260, height: 170 },
+      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-treasure-chest.png',
+      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-treasure-chest.md'
+    },
+    {
+      id: 'asset_rope_ladder',
+      objectId: 'obj_rope_ladder',
+      name: 'foreground rope ladder',
+      layerId: 'foreground_2',
+      kind: 'foreground_occluder',
+      movable: false,
+      interactive: true,
+      needsBgRemoval: true,
+      source: 'transparent_png_cutout',
+      logicRole: 'front occluder and optional climb/inspect hotspot',
+      position: { x: 1260, y: 430 },
+      size: { width: 210, height: 520 },
+      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-rope-ladder.png',
+      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-rope-ladder.md'
+    },
+    {
+      id: 'asset_floor_crate',
+      objectId: 'obj_floor_crate',
+      name: 'movable floor crate',
+      layerId: 'foreground_1',
+      kind: 'movable_prop',
+      movable: true,
+      interactive: true,
+      needsBgRemoval: true,
+      source: 'transparent_png_cutout',
+      logicRole: 'secondary floor object, can hide or block a clue',
+      position: { x: 1320, y: 705 },
+      size: { width: 260, height: 190 },
+      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-floor-crate.png',
+      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-floor-crate.md'
+    }
+  ];
+
+  const internalBrief = buildInternalBrief({
+    request,
+    title: 'Inside of a pirate ship',
+    style: 'warm hand-painted child-safe 2D adventure game level with separate usable game layers',
+    mustPlan: assetSlots
+  });
+
+  return {
+    title: 'Inside of a pirate ship',
+    intent: 'A cozy child-safe below-deck pirate ship room with a clean background plate, fixed wall/floor details, and separate transparent foreground puzzle props.',
+    gameplayPurpose: 'Inspect the wall map area, interact with the treasure chest, move a crate or use a clue, then unlock the exit.',
+    safetyCheck: 'No weapons, skulls, alcohol bottles, horror, gore, realistic violence, drugs, adult themes, or threatening pirate imagery.',
+    backgroundItems: ['clean wooden ship room', 'curved beams', 'plank floor', 'portholes', 'warm lantern light'],
+    movableItems: ['movable treasure chest', 'movable floor crate'],
+    logicRules: [
+      'treasure_chest_opened reveals or grants first clue',
+      'wall_map_desk can be inspected after first clue',
+      'floor_crate can be moved to reveal secondary clue',
+      'success enables the ship exit'
+    ],
+    layerPlanText: 'Background: clean ship room and floor plate.\nBackground Objects: fixed wall map/desk and attached decorations.\nPlayer Space: walkable wooden floor zone.\nForeground 1: treasure chest and floor crate as transparent PNGs.\nForeground 2: rope ladder as transparent PNG occluder.',
+    internalBrief,
+    assetSlots,
+    logicScript: 'Goal: Solve the pirate ship room puzzle and activate the exit.\nRules:\n- Open or inspect the treasure chest.\n- Use the discovered clue on the wall map/desk area.\n- Move the floor crate if needed to reveal a secondary clue.\n- When the clue chain is complete, enable the ship exit.'
   };
 }
 

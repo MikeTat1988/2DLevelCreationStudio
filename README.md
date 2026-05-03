@@ -39,9 +39,12 @@ C:\Dev\2DLevelCreationStudio\handoff\requests\<level-id>-structured-plan-current
 C:\Dev\2DLevelCreationStudio\wwwroot\assets\generated\<level-id>-current.png
 ```
 
-7. Click `Apply Codex result` in the studio. The app reads the current structured plan and image, refreshes the level image, updates the level tree, and records the generated asset.
+7. Codex should also create per-element prompt/image files when the structured plan includes `promptPath` and `imagePath`.
+8. Click `Apply Codex result` in the studio. The app reads the current structured plan and image, refreshes the level image, updates the level tree, and records the generated assets.
 
 If you regenerate, the app overwrites the current brief and current plan for that level. Runtime handoff files and generated images are intentionally gitignored except for directory keepers.
+
+The Studio UI should stay simple: collapsible generation prompt at the top, then the element tree. File paths are accessed from each element node using `Reveal image`, `Reveal prompt`, or `Copy id`.
 
 ## Fast File Map
 
@@ -51,6 +54,8 @@ If you regenerate, the app overwrites the current brief and current plan for tha
 - Current generation brief: `C:\Dev\2DLevelCreationStudio\handoff\requests\level_1-image-brief-current.md`
 - Current elements list: `C:\Dev\2DLevelCreationStudio\handoff\requests\level_1-structured-plan-current.json`
 - Current generated image: `C:\Dev\2DLevelCreationStudio\wwwroot\assets\generated\level_1-current.png`
+- Per-element prompts: `C:\Dev\2DLevelCreationStudio\handoff\requests\elements\`
+- Per-element images: `C:\Dev\2DLevelCreationStudio\wwwroot\assets\generated\level_1-*.png`
 
 ## What It Is
 

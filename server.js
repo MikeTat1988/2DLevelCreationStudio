@@ -2,6 +2,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const { spawn } = require('node:child_process');
 
 const PORT = Number(process.env.PORT || 5190);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -37,6 +38,11 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && req.url.startsWith('/api/current-generation-result')) {
       await handleReadCurrentGenerationResult(req, res);
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/reveal-path') {
+      await handleRevealPath(req, res);
       return;
     }
 
@@ -150,6 +156,31 @@ async function handleReadCurrentGenerationResult(req, res) {
     imageRevision: imageStat.mtimeMs,
     imageLastWriteTime: imageStat.mtime.toISOString()
   });
+}
+
+async function handleRevealPath(req, res) {
+  const body = await readJson(req);
+  const targetPath = path.normalize(String(body.path || ''));
+  const allowedRoots = [
+    path.normalize(__dirname),
+    path.normalize(path.join(__dirname, 'handoff')),
+    path.normalize(path.join(__dirname, 'wwwroot', 'assets'))
+  ];
+
+  if (!targetPath || !allowedRoots.some((root) => targetPath === root || targetPath.startsWith(`${root}${path.sep}`))) {
+    sendJson(res, 400, { error: 'Path is outside the studio workspace.' });
+    return;
+  }
+
+  const exists = await fsp.stat(targetPath).catch(() => null);
+  if (!exists) {
+    sendJson(res, 404, { error: 'Path does not exist.' });
+    return;
+  }
+
+  const args = exists.isDirectory() ? [targetPath] : ['/select,', targetPath];
+  spawn('explorer.exe', args, { detached: true, stdio: 'ignore' }).unref();
+  sendJson(res, 200, { ok: true, path: targetPath });
 }
 
 async function cleanupRequests(levelId) {

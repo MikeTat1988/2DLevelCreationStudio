@@ -33,6 +33,8 @@ Codex should save the current level image here:
 C:\Dev\2DLevelCreationStudio\wwwroot\assets\generated\level_1-current.png
 ```
 
+When the structured plan includes element `imagePath` and `promptPath`, create those files too. The Studio tree exposes them from each node with `Reveal image`, `Reveal prompt`, and `Copy id`.
+
 Then use the Studio button `Apply Codex result`, or call:
 
 ```text

@@ -33,11 +33,25 @@ These rules apply to every generated level image. They stay stable and should no
 
 Every generated level should be planned into:
 
-- `background`: permanent room shell, sky, walls, floor, fixed lighting.
-- `background_objects`: fixed readable objects attached to the scene.
-- `player`: walkable/approachable gameplay area and larger props.
-- `foreground_1`: clickable/movable objects and occluders.
-- `foreground_2`: front-most occlusion frame if needed.
+- `background`: clean permanent room shell and floor. This is the playable base plate. It should not contain movable props that need to be clicked, collected, moved, or removed later.
+- `background_objects`: fixed readable objects attached to walls, ceiling, or permanent architecture. Examples: wall shelves, maps, portholes, pipes, lamps, fixed doors.
+- `player`: walkable floor zone and large floor props the character can approach. These can be baked or separately exported depending on gameplay.
+- `foreground_1`: clickable, movable, collectible, or puzzle props. These must be planned as individual transparent PNG assets.
+- `foreground_2`: front-most occluders or frame pieces that draw over the character. Use sparingly and plan as separate transparent PNG assets if they occlude gameplay.
+
+The structured elements list must be richer than one generic prop. Every meaningful visual/gameplay object should have:
+
+- stable `id`
+- readable `name`
+- `layerId`
+- `kind`
+- `position` and `size` in 1536 x 864 coordinates
+- `logicRole`
+- `imagePath`
+- `promptPath`
+- `needsBgRemoval`
+- `movable`
+- `interactive`
 
 ## Asset Rules
 
@@ -46,8 +60,11 @@ Every generated level should be planned into:
 - Important props should not be fused into heavy shadows or neighboring objects.
 - If an object will move, reveal, or be collected, plan it as a future transparent PNG cutout.
 - Permanent room shell stays baked into the background.
+- For every `foreground_1` or `foreground_2` movable/interactive object, generate a transparent-background PNG.
+- For the background, generate a clean background plate with the room shell, walls, floor, fixed lighting, and no duplicate movable props.
+- For floor objects, separate the floor itself from movable floor props.
+- For wall objects, separate fixed wall decoration from interactive/clickable wall objects.
 
 ## Handoff Contract
 
 The short user-facing brief is for approval. The structured plan is for the app and Codex. If the user rejects/regenerates, overwrite the current brief and current plan. If the user edits the brief, regenerate the plan from the edited brief before proceeding.
-
