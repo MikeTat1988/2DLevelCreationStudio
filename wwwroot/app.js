@@ -211,6 +211,8 @@ const els = {
   inspector: document.getElementById('inspector'),
   levelSelect: document.getElementById('levelSelect'),
   levelMeta: document.getElementById('levelMeta'),
+  levelStage: document.getElementById('levelStage'),
+  levelEmptyState: document.getElementById('levelEmptyState'),
   addLevelButton: document.getElementById('addLevelButton'),
   exportGameButton: document.getElementById('exportGameButton'),
   generateLevelButton: document.getElementById('generateLevelButton'),
@@ -731,8 +733,25 @@ function renderHeader() {
   els.levelMeta.textContent = `${level.id} | ${level.canvas.width} x ${level.canvas.height} canvas`;
 }
 
+function renderLevelStage() {
+  const level = getSelectedLevel();
+  const imageRef = level.generation.generatedImageRef;
+  const imageSrc = imageRef?.previewUrl ?? 'assets/placeholder-level.svg';
+  const imageLabel = imageRef
+    ? imageRef.status === 'approved'
+      ? 'Approved generated level image'
+      : 'Draft generated level image'
+    : 'Level placeholder';
+
+  els.levelStage.innerHTML = `
+    <img class="level-placeholder ${imageRef ? 'is-generated' : ''}" src="${escapeHtml(imageSrc)}" alt="${escapeHtml(imageLabel)}">
+    <div class="level-empty-state">${escapeHtml(imageRef ? imageLabel : 'Ready for objects, layers, and mechanics')}</div>
+  `;
+}
+
 function render() {
   renderHeader();
+  renderLevelStage();
   renderGameTree();
   renderInspector();
 }
@@ -808,7 +827,8 @@ function generateDraftFromRequest() {
   level.logicScript = plan.logicScript;
   level.generation.generatedImageRef = {
     status: 'draft_planned',
-    note: 'In the real bridge, this is where the generated image asset reference will be stored together with the plan.'
+    previewUrl: 'assets/generated-prison-cell-draft.svg',
+    note: 'Prototype preview. In the real bridge, this stores the generated image asset reference together with the plan.'
   };
   saveProject();
   generationPanelOpen = true;
@@ -825,6 +845,9 @@ function approveGeneratedPlan() {
   }
 
   level.generation.approvedPlan = structuredClone(level.generation.draftPlan);
+  if (level.generation.generatedImageRef) {
+    level.generation.generatedImageRef.status = 'approved';
+  }
   level.generation.assetSlots = structuredClone(level.generation.draftPlan.assetSlots);
   level.objects = level.generation.assetSlots.map((slot, index) => ({
     id: slot.objectId,
