@@ -736,16 +736,21 @@ function renderHeader() {
 function renderLevelStage() {
   const level = getSelectedLevel();
   const imageRef = level.generation.generatedImageRef;
-  const imageSrc = imageRef?.previewUrl ?? 'assets/placeholder-level.svg';
+  const imageSrc = imageRef?.previewUrl
+    ? `${imageRef.previewUrl}?draft=${encodeURIComponent(imageRef.revision ?? 'current')}`
+    : 'assets/placeholder-level.svg';
   const imageLabel = imageRef
     ? imageRef.status === 'approved'
       ? 'Approved generated level image'
       : 'Draft generated level image'
     : 'Level placeholder';
 
+  const revisionLabel = imageRef?.revision ? `rev ${String(imageRef.revision).slice(-6)}` : '';
+
   els.levelStage.innerHTML = `
     <img class="level-placeholder ${imageRef ? 'is-generated' : ''}" src="${escapeHtml(imageSrc)}" alt="${escapeHtml(imageLabel)}">
     <div class="level-empty-state">${escapeHtml(imageRef ? imageLabel : 'Ready for objects, layers, and mechanics')}</div>
+    ${revisionLabel ? `<div class="level-revision-badge">${escapeHtml(revisionLabel)}</div>` : ''}
   `;
 }
 
@@ -815,7 +820,9 @@ function generateDraftFromRequest() {
   const request = (level.generation.userRequest || 'generate me a level that is a prison cell').trim();
   const isPrisonCell = /prison|cell|jail|locked/i.test(request);
   const plan = isPrisonCell ? buildPrisonCellPlan(request) : buildGenericRoomPlan(request);
+  const revision = Date.now();
 
+  level.generation.approvedPlan = null;
   level.generation.draftPlan = plan;
   level.generation.summary = plan.intent;
   level.generation.composition = plan.layerPlanText;
@@ -825,10 +832,12 @@ function generateDraftFromRequest() {
   level.generation.testPrompt = plan.internalBrief;
   level.generation.assetSlots = plan.assetSlots;
   level.logicScript = plan.logicScript;
+  level.objects = [];
   level.generation.generatedImageRef = {
     status: 'draft_planned',
-    previewUrl: 'assets/generated-prison-cell-draft.svg',
-    note: 'Prototype preview. In the real bridge, this stores the generated image asset reference together with the plan.'
+    previewUrl: isPrisonCell ? 'assets/cell-room-reference.jpg' : 'assets/placeholder-level.svg',
+    revision,
+    note: 'Draft preview. The current saved draft replaces the previous draft; future bridge output should write one current image reference here.'
   };
   saveProject();
   generationPanelOpen = true;

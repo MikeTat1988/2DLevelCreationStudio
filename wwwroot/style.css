@@ -331,6 +331,19 @@ p {
   font-weight: 700;
 }
 
+.level-revision-badge {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 6px 8px;
+  border: 1px solid rgba(88, 166, 255, .34);
+  border-radius: 999px;
+  background: rgba(13, 17, 23, .82);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 850;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
