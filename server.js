@@ -30,6 +30,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'GET' && req.url.startsWith('/api/current-generation-request')) {
+      await handleReadCurrentGenerationRequest(req, res);
+      return;
+    }
+
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       sendJson(res, 405, { error: 'Method not allowed' });
       return;
@@ -69,6 +74,25 @@ async function handleWriteGenerationRequest(req, res) {
     revision,
     saved: filename
   });
+}
+
+async function handleReadCurrentGenerationRequest(req, res) {
+  const url = new URL(req.url, `http://${HOST}:${PORT}`);
+  const levelId = safeName(url.searchParams.get('levelId') || 'level');
+  const currentPath = path.join(REQUESTS_DIR, `${levelId}-generation-request-current.md`);
+
+  try {
+    const markdown = await fsp.readFile(currentPath, 'utf8');
+    sendJson(res, 200, {
+      levelId,
+      path: currentPath,
+      markdown
+    });
+  } catch {
+    sendJson(res, 404, {
+      error: `No current generation request found for ${levelId}.`
+    });
+  }
 }
 
 async function cleanupRequests(levelId) {

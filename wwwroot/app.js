@@ -212,6 +212,7 @@ const els = {
   inspector: document.getElementById('inspector'),
   levelSelect: document.getElementById('levelSelect'),
   levelMeta: document.getElementById('levelMeta'),
+  statusPill: document.getElementById('statusPill'),
   levelStage: document.getElementById('levelStage'),
   levelEmptyState: document.getElementById('levelEmptyState'),
   addLevelButton: document.getElementById('addLevelButton'),
@@ -223,6 +224,10 @@ const els = {
   renameLevelId: document.getElementById('renameLevelId'),
   renameLevelInput: document.getElementById('renameLevelInput'),
   cancelRenameButton: document.getElementById('cancelRenameButton'),
+  requestDialog: document.getElementById('requestDialog'),
+  requestDialogPath: document.getElementById('requestDialogPath'),
+  requestMarkdownView: document.getElementById('requestMarkdownView'),
+  closeRequestButton: document.getElementById('closeRequestButton'),
   startGameButton: document.getElementById('startGameButton')
 };
 
@@ -742,6 +747,20 @@ function renderHeader() {
   els.projectTitleLabel.textContent = project.game.id;
   populateLevelSelect(els.levelSelect);
   els.levelMeta.textContent = `${level.id} | ${level.canvas.width} x ${level.canvas.height} canvas`;
+  renderStatusButton(level);
+}
+
+function renderStatusButton(level) {
+  const requestPath = level.generation.generatedImageRef?.currentRequestPath;
+  if (requestPath) {
+    els.statusPill.textContent = 'Open request';
+    els.statusPill.classList.add('has-request');
+    els.statusPill.title = 'Read the Markdown generation request written for Codex.';
+  } else {
+    els.statusPill.textContent = 'Authoring';
+    els.statusPill.classList.remove('has-request');
+    els.statusPill.title = 'No generation request yet.';
+  }
 }
 
 function renderLevelStage() {
@@ -1241,8 +1260,8 @@ function showStatus(message) {
   pill.classList.add('is-message');
   window.clearTimeout(showStatus.timer);
   showStatus.timer = window.setTimeout(() => {
-    pill.textContent = 'Authoring';
     pill.classList.remove('is-message');
+    renderStatusButton(getSelectedLevel());
   }, 4200);
 }
 
@@ -1259,6 +1278,11 @@ els.exportGameButton.addEventListener('click', exportGame);
 els.generateLevelButton.addEventListener('click', openGenerateLevel);
 els.characterImportInput.addEventListener('change', (event) => importCharacter(event.target.files[0]));
 els.startGameButton.addEventListener('click', startGame);
+els.statusPill.addEventListener('click', openCurrentRequest);
+els.closeRequestButton.addEventListener('click', closeRequestDialog);
+els.requestDialog.addEventListener('click', (event) => {
+  if (event.target === els.requestDialog) closeRequestDialog();
+});
 els.cancelRenameButton.addEventListener('click', closeRenameDialog);
 els.renameDialog.addEventListener('click', (event) => {
   if (event.target === els.renameDialog) closeRenameDialog();
@@ -1286,4 +1310,30 @@ loadInitialProject().then(render);
 
 function closeRenameDialog() {
   els.renameDialog.hidden = true;
+}
+
+async function openCurrentRequest() {
+  const level = getSelectedLevel();
+  if (!level.generation.generatedImageRef?.currentRequestPath) {
+    showStatus('No request yet');
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/current-generation-request?levelId=${encodeURIComponent(level.id)}`);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `Could not read request (${response.status})`);
+    }
+
+    els.requestDialogPath.textContent = payload.path;
+    els.requestMarkdownView.textContent = payload.markdown;
+    els.requestDialog.hidden = false;
+  } catch (error) {
+    showStatus(error.message || 'Could not open request');
+  }
+}
+
+function closeRequestDialog() {
+  els.requestDialog.hidden = true;
 }

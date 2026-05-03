@@ -40,7 +40,7 @@
             <select id="levelSelect" class="level-select"></select>
             <p id="levelMeta">1536 x 864 canvas</p>
           </div>
-          <span id="statusPill" class="status-pill">Authoring</span>
+          <button id="statusPill" class="status-pill" type="button">Authoring</button>
         </div>
         <div class="level-stage-wrap">
           <div id="levelStage" class="level-stage">
@@ -74,6 +74,19 @@
     </form>
   </div>
 
-  <script src="app.js?v=20260503-codex-handoff"></script>
+  <div id="requestDialog" class="dialog-backdrop" hidden>
+    <section class="dialog request-dialog" aria-label="Generation request">
+      <div class="dialog-title-row">
+        <div>
+          <h2>Generation Request</h2>
+          <p id="requestDialogPath"></p>
+        </div>
+        <button type="button" id="closeRequestButton">Close</button>
+      </div>
+      <pre id="requestMarkdownView" class="markdown-view"></pre>
+    </section>
+  </div>
+
+  <script src="app.js?v=20260503-request-reader-2"></script>
 </body>
 </html>

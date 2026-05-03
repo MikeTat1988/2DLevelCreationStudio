@@ -347,6 +347,7 @@ p {
 .status-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   max-width: 190px;
   min-height: 28px;
   padding: 0 10px;
@@ -359,12 +360,25 @@ p {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: default;
 }
 
 .status-pill.is-message {
   border-color: rgba(88, 166, 255, .38);
   background: rgba(31, 111, 235, .18);
   color: var(--accent);
+}
+
+.status-pill.has-request {
+  cursor: pointer;
+  border-color: rgba(88, 166, 255, .45);
+  background: rgba(31, 111, 235, .2);
+  color: var(--accent);
+}
+
+.status-pill.has-request:hover {
+  border-color: var(--accent);
+  background: rgba(31, 111, 235, .3);
 }
 
 .field {
@@ -863,6 +877,34 @@ button:disabled {
   border-radius: 8px;
   background: var(--panel);
   box-shadow: var(--shadow);
+}
+
+.request-dialog {
+  width: min(900px, calc(100vw - 36px));
+  height: min(720px, calc(100vh - 36px));
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.dialog-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.markdown-view {
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #080d14;
+  color: var(--ink);
+  white-space: pre-wrap;
+  font-family: Consolas, Cascadia Mono, monospace;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .dialog input {
