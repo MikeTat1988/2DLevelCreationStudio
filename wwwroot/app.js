@@ -395,6 +395,7 @@ function buildDisplayTitleFromRequest(request) {
 function buildBackgroundOnlyPlan(request) {
   const level = getSelectedLevel();
   const levelId = level.id;
+  const levelAssetsPath = `C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${levelId}`;
   const safeName = normalizeRequest(request) || 'adventure room';
   const title = `${buildDisplayTitleFromRequest(safeName).replace(/\s*Brief$/, '')} Empty Background`;
   const baseAssetName = safeName
@@ -415,8 +416,8 @@ function buildBackgroundOnlyPlan(request) {
       logicRole: 'empty permanent room shell, walls, floor, fixed lighting, no movable props',
       position: { x: 768, y: 432 },
       size: { width: 1536, height: 864 },
-      imagePath: `C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${levelId}-background-clean.png`,
-      promptPath: `C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\${levelId}-background-clean.md`
+      imagePath: `${levelAssetsPath}\\current.png`,
+      promptPath: `C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\${levelId}\\elements\\background-clean.md`
     },
     {
       id: 'asset_floor_walk_zone',
@@ -432,7 +433,7 @@ function buildBackgroundOnlyPlan(request) {
       position: { x: 768, y: 704 },
       size: { width: 1504, height: 250 },
       imagePath: '',
-      promptPath: `C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\${levelId}-floor-zone.md`
+      promptPath: `C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\${levelId}\\elements\\floor-zone.md`
     }
   ];
   const internalBrief = buildInternalBrief({
@@ -513,7 +514,7 @@ function getStagePoint(event, stage) {
 }
 
 function getCurrentLevelAssetsDirectory() {
-  return 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated';
+  return `C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${getSelectedLevel().id}`;
 }
 
 function renderTreeSection(title, items, renderItem, action) {
@@ -1294,7 +1295,7 @@ function buildGenerationBriefMarkdown(level, plan) {
     '## Save Result Here',
     '',
     '```text',
-    `C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${level.id}-current.png`,
+    `C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${level.id}\\current.png`,
     '```',
     '',
     '## Review Note',
@@ -1312,7 +1313,7 @@ function buildStructuredPlanJson(level, plan, internalBrief) {
     sourceRequest: plan.sourceRequest || level.generation.userRequest || '',
     planNotes: level.generation.planNotes || '',
     generalGuidelinesPath: 'C:\\Dev\\2DLevelCreationStudio\\docs\\handoff\\general-image-guidelines.md',
-    outputImagePath: `C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${level.id}-current.png`,
+    outputImagePath: `C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\${level.id}\\current.png`,
     internalBrief,
     plan: {
       title: buildDisplayTitleFromRequest(plan.sourceRequest || level.generation.userRequest),
@@ -1393,232 +1394,6 @@ function approveGeneratedPlan() {
 function formatLayerName(layerId) {
   const layer = defaultLayers.find((item) => item.id === layerId);
   return layer?.name ?? layerId;
-}
-
-function buildPrisonCellPlan(request) {
-  const assetSlots = cellRoomAssetSlots.map((slot, index) => ({
-    ...structuredClone(slot),
-    objectId: slot.id.replace('asset_', 'obj_'),
-    interactive: slot.kind !== 'background',
-    position: suggestedPositionForSlot(slot.id, index),
-    size: suggestedSizeForSlot(slot.id),
-    occludesPlayer: slot.layerId.startsWith('foreground') ? 'body' : 'none'
-  }));
-
-  const internalBrief = buildInternalBrief({
-    request,
-    title: 'Prison Cell Level',
-    style: 'warm hand-painted child-safe 2D adventure game room',
-    mustPlan: assetSlots
-  });
-
-  return {
-    title: 'Prison Cell Level',
-    intent: 'A friendly prison-cell puzzle room where Tom finds a hidden key and opens the locked door.',
-    gameplayPurpose: 'Move a cover object, collect a key, try one wrong item, unlock the door, then exit.',
-    safetyCheck: 'Friendly puzzle-room mood only. No horror, gore, realistic violence, weapons, drugs, alcohol, or adult themes.',
-    backgroundItems: ['stone frame', 'plaster wall', 'green lower wall', 'tiled floor', 'blue locked door', 'barred window', 'lamp light cone'],
-    movableItems: assetSlots.filter((slot) => slot.movable).map((slot) => slot.name),
-    logicRules: [
-      'pillow_moved reveals small brass key',
-      'small brass key can be collected',
-      'small brass key unlocks blue door',
-      'broom on lock fails with gentle feedback'
-    ],
-    layerPlanText: [
-      'Background: room shell, stone frame, wall, floor, door, window, pipes, lighting.',
-      'Background Objects: shelves, books, wall drawings, door lock plate.',
-      'Player Space: bed and broom approach zones.',
-      'Foreground 1: pillow, key, crate, bucket, rug, table props.',
-      'Foreground 2: optional front frame/occluders.'
-    ].join('\n'),
-    internalBrief,
-    assetSlots,
-    logicScript: cellRoomLogicScript
-  };
-}
-
-function buildPirateShipPlan(request) {
-  const assetSlots = [
-    {
-      id: 'asset_background_clean',
-      objectId: 'obj_background_clean',
-      name: 'clean pirate ship room and floor',
-      layerId: 'background',
-      kind: 'clean_background_plate',
-      movable: false,
-      interactive: false,
-      needsBgRemoval: false,
-      source: 'generated_clean_background',
-      logicRole: 'permanent ship interior, walls, beams, portholes, floor, lighting, no movable foreground duplicates',
-      position: { x: 768, y: 432 },
-      size: { width: 1536, height: 864 },
-      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-background-clean.png',
-      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-background-clean.md'
-    },
-    {
-      id: 'asset_wall_map_desk',
-      objectId: 'obj_wall_map_desk',
-      name: 'fixed wall map and captain desk',
-      layerId: 'background_objects',
-      kind: 'fixed_wall_story_prop',
-      movable: false,
-      interactive: true,
-      needsBgRemoval: false,
-      source: 'baked_or_optional_cutout',
-      logicRole: 'inspectable clue area attached to the back wall',
-      position: { x: 760, y: 415 },
-      size: { width: 430, height: 250 },
-      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-wall-map-desk.png',
-      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-wall-map-desk.md'
-    },
-    {
-      id: 'asset_floor_walk_zone',
-      objectId: 'obj_floor_walk_zone',
-      name: 'walkable wooden floor zone',
-      layerId: 'player',
-      kind: 'walkable_area',
-      movable: false,
-      interactive: false,
-      needsBgRemoval: false,
-      source: 'geometry_from_background',
-      logicRole: 'main player navigation area',
-      position: { x: 780, y: 695 },
-      size: { width: 1100, height: 250 },
-      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-floor-zone.png',
-      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-floor-zone.md'
-    },
-    {
-      id: 'asset_treasure_chest',
-      objectId: 'obj_treasure_chest',
-      name: 'movable treasure chest',
-      layerId: 'foreground_1',
-      kind: 'movable_prop',
-      movable: true,
-      interactive: true,
-      needsBgRemoval: true,
-      source: 'transparent_png_cutout',
-      logicRole: 'primary puzzle interaction, opens or moves to reveal clue',
-      position: { x: 725, y: 650 },
-      size: { width: 260, height: 170 },
-      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-treasure-chest.png',
-      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-treasure-chest.md'
-    },
-    {
-      id: 'asset_rope_ladder',
-      objectId: 'obj_rope_ladder',
-      name: 'foreground rope ladder',
-      layerId: 'foreground_2',
-      kind: 'foreground_occluder',
-      movable: false,
-      interactive: true,
-      needsBgRemoval: true,
-      source: 'transparent_png_cutout',
-      logicRole: 'front occluder and optional climb/inspect hotspot',
-      position: { x: 1260, y: 430 },
-      size: { width: 210, height: 520 },
-      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-rope-ladder.png',
-      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-rope-ladder.md'
-    },
-    {
-      id: 'asset_floor_crate',
-      objectId: 'obj_floor_crate',
-      name: 'movable floor crate',
-      layerId: 'foreground_1',
-      kind: 'movable_prop',
-      movable: true,
-      interactive: true,
-      needsBgRemoval: true,
-      source: 'transparent_png_cutout',
-      logicRole: 'secondary floor object, can hide or block a clue',
-      position: { x: 1320, y: 705 },
-      size: { width: 260, height: 190 },
-      imagePath: 'C:\\Dev\\2DLevelCreationStudio\\wwwroot\\assets\\generated\\level_1-floor-crate.png',
-      promptPath: 'C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\elements\\level_1-floor-crate.md'
-    }
-  ];
-
-  const internalBrief = buildInternalBrief({
-    request,
-    title: 'Inside of a pirate ship',
-    style: 'warm hand-painted child-safe 2D adventure game level with separate usable game layers',
-    mustPlan: assetSlots
-  });
-
-  return {
-    title: 'Inside of a pirate ship',
-    intent: 'A cozy child-safe below-deck pirate ship room with a clean background plate, fixed wall/floor details, and separate transparent foreground puzzle props.',
-    gameplayPurpose: 'Inspect the wall map area, interact with the treasure chest, move a crate or use a clue, then unlock the exit.',
-    safetyCheck: 'No weapons, skulls, alcohol bottles, horror, gore, realistic violence, drugs, adult themes, or threatening pirate imagery.',
-    backgroundItems: ['clean wooden ship room', 'curved beams', 'plank floor', 'portholes', 'warm lantern light'],
-    movableItems: ['movable treasure chest', 'movable floor crate'],
-    logicRules: [
-      'treasure_chest_opened reveals or grants first clue',
-      'wall_map_desk can be inspected after first clue',
-      'floor_crate can be moved to reveal secondary clue',
-      'success enables the ship exit'
-    ],
-    layerPlanText: 'Background: clean ship room and floor plate.\nBackground Objects: fixed wall map/desk and attached decorations.\nPlayer Space: walkable wooden floor zone.\nForeground 1: treasure chest and floor crate as transparent PNGs.\nForeground 2: rope ladder as transparent PNG occluder.',
-    internalBrief,
-    assetSlots,
-    logicScript: 'Goal: Solve the pirate ship room puzzle and activate the exit.\nRules:\n- Open or inspect the treasure chest.\n- Use the discovered clue on the wall map/desk area.\n- Move the floor crate if needed to reveal a secondary clue.\n- When the clue chain is complete, enable the ship exit.'
-  };
-}
-
-function buildGenericRoomPlan(request) {
-  const safeName = request.replace(/^generate me a level that is\s+/i, '').trim() || 'adventure room';
-  const notes = getSelectedLevel().generation.planNotes.trim();
-  const assetSlots = [
-    {
-      id: 'asset_background_room',
-      objectId: 'obj_background_room',
-      name: `${safeName} background`,
-      layerId: 'background',
-      kind: 'background',
-      movable: false,
-      interactive: false,
-      needsBgRemoval: false,
-      source: 'full_level_generation',
-      logicRole: 'permanent room plate',
-      position: { x: 768, y: 432 },
-      size: { width: 1536, height: 864 }
-    },
-    {
-      id: 'asset_primary_interactive_prop',
-      objectId: 'obj_primary_interactive_prop',
-      name: 'primary interactive prop',
-      layerId: 'foreground_1',
-      kind: 'movable_prop',
-      movable: true,
-      interactive: true,
-      needsBgRemoval: true,
-      source: 'separate_cutout_generation',
-      logicRole: 'first puzzle interaction',
-      position: { x: 660, y: 610 },
-      size: { width: 180, height: 120 }
-    }
-  ];
-
-  const internalBrief = buildInternalBrief({
-    request,
-    title: safeName,
-    style: 'child-safe 2D adventure game level',
-    mustPlan: assetSlots
-  });
-
-  return {
-    title: safeName,
-    intent: notes ? `A child-safe adventure level based on: ${request}. Plan notes: ${notes}` : `A child-safe adventure level based on: ${request}`,
-    gameplayPurpose: 'Create a readable room with at least one interaction, one collectible or clue, and one exit.',
-    safetyCheck: 'No horror, gore, realistic violence, weapons, drugs, alcohol, or adult themes.',
-    backgroundItems: ['room shell', 'walkable floor', 'exit area'],
-    movableItems: ['primary interactive prop'],
-    logicRules: ['interactive prop changes level state', 'success enables exit'],
-    layerPlanText: 'Background: permanent room plate.\nForeground 1: movable interactive props.\nPlayer Space: walkable area and character approach zones.',
-    internalBrief,
-    assetSlots,
-    logicScript: 'Goal: Solve the room puzzle and reach the exit.\nRules:\n- Interact with the primary prop.\n- Collect or reveal the needed clue.\n- Use the clue to activate the exit.'
-  };
 }
 
 function buildInternalBrief({ request, title, style, mustPlan, phase = 'full_level' }) {

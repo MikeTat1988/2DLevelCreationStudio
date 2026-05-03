@@ -70,15 +70,18 @@ async function handleWriteGenerationRequest(req, res) {
 
   await fsp.mkdir(REQUESTS_DIR, { recursive: true });
   await fsp.mkdir(RESULTS_DIR, { recursive: true });
+  await fsp.mkdir(path.join(GENERATED_DIR, levelId), { recursive: true });
+  const levelRequestsDir = path.join(REQUESTS_DIR, levelId);
+  await fsp.mkdir(levelRequestsDir, { recursive: true });
   const revision = Date.now();
-  const briefFilename = `${levelId}-image-brief-${revision}.md`;
-  const currentBriefFilename = `${levelId}-image-brief-current.md`;
-  const planFilename = `${levelId}-structured-plan-${revision}.json`;
-  const currentPlanFilename = `${levelId}-structured-plan-current.json`;
-  const filePath = path.join(REQUESTS_DIR, briefFilename);
-  const currentPath = path.join(REQUESTS_DIR, currentBriefFilename);
-  const planPath = path.join(REQUESTS_DIR, planFilename);
-  const currentPlanPath = path.join(REQUESTS_DIR, currentPlanFilename);
+  const briefFilename = `image-brief-${revision}.md`;
+  const currentBriefFilename = 'image-brief-current.md';
+  const planFilename = `structured-plan-${revision}.json`;
+  const currentPlanFilename = 'structured-plan-current.json';
+  const filePath = path.join(levelRequestsDir, briefFilename);
+  const currentPath = path.join(levelRequestsDir, currentBriefFilename);
+  const planPath = path.join(levelRequestsDir, planFilename);
+  const currentPlanPath = path.join(levelRequestsDir, currentPlanFilename);
 
   await cleanupRequests(levelId);
   await fsp.writeFile(filePath, markdown, 'utf8');
@@ -87,6 +90,7 @@ async function handleWriteGenerationRequest(req, res) {
     const planContent = typeof planJson === 'string' ? planJson : JSON.stringify(planJson, null, 2);
     await fsp.writeFile(planPath, planContent, 'utf8');
     await fsp.writeFile(currentPlanPath, planContent, 'utf8');
+    await writeElementPromptFiles(levelRequestsDir, planContent);
   }
 
   sendJson(res, 200, {
@@ -102,8 +106,8 @@ async function handleWriteGenerationRequest(req, res) {
 async function handleReadCurrentGenerationRequest(req, res) {
   const url = new URL(req.url, `http://${HOST}:${PORT}`);
   const levelId = safeName(url.searchParams.get('levelId') || 'level');
-  const currentPath = path.join(REQUESTS_DIR, `${levelId}-image-brief-current.md`);
-  const currentPlanPath = path.join(REQUESTS_DIR, `${levelId}-structured-plan-current.json`);
+  const currentPath = path.join(REQUESTS_DIR, levelId, 'image-brief-current.md');
+  const currentPlanPath = path.join(REQUESTS_DIR, levelId, 'structured-plan-current.json');
 
   try {
     const markdown = await fsp.readFile(currentPath, 'utf8');
@@ -125,8 +129,8 @@ async function handleReadCurrentGenerationRequest(req, res) {
 async function handleReadCurrentGenerationResult(req, res) {
   const url = new URL(req.url, `http://${HOST}:${PORT}`);
   const levelId = safeName(url.searchParams.get('levelId') || 'level');
-  const currentPlanPath = path.join(REQUESTS_DIR, `${levelId}-structured-plan-current.json`);
-  const imagePath = path.join(GENERATED_DIR, `${levelId}-current.png`);
+  const currentPlanPath = path.join(REQUESTS_DIR, levelId, 'structured-plan-current.json');
+  const imagePath = path.join(GENERATED_DIR, levelId, 'current.png');
 
   const [planJson, imageStat] = await Promise.all([
     fsp.readFile(currentPlanPath, 'utf8').catch(() => null),
@@ -152,7 +156,7 @@ async function handleReadCurrentGenerationResult(req, res) {
     planPath: currentPlanPath,
     planJson,
     imagePath,
-    imageUrl: `/assets/generated/${levelId}-current.png`,
+    imageUrl: `/assets/generated/${levelId}/current.png`,
     imageRevision: imageStat.mtimeMs,
     imageLastWriteTime: imageStat.mtime.toISOString()
   });
@@ -183,16 +187,61 @@ async function handleRevealPath(req, res) {
   sendJson(res, 200, { ok: true, path: targetPath });
 }
 
+async function writeElementPromptFiles(levelRequestsDir, planContent) {
+  let parsed;
+  try {
+    parsed = JSON.parse(planContent);
+  } catch {
+    return;
+  }
+
+  const slots = Array.isArray(parsed?.plan?.assetSlots) ? parsed.plan.assetSlots : [];
+  const elementsDir = path.join(levelRequestsDir, 'elements');
+  await fsp.mkdir(elementsDir, { recursive: true });
+
+  await Promise.all(slots.map(async (slot) => {
+    const rawPromptPath = path.normalize(String(slot.promptPath || ''));
+    if (!rawPromptPath || !rawPromptPath.startsWith(`${elementsDir}${path.sep}`)) return;
+
+    const lines = [
+      `# Element Prompt: ${slot.name || slot.id || 'Asset'}`,
+      '',
+      `Level: ${parsed.levelId || ''} / ${parsed.levelName || ''}`.trim(),
+      `Element id: ${slot.id || ''}`,
+      `Object id: ${slot.objectId || ''}`,
+      `Layer: ${slot.layerId || ''}`,
+      '',
+      '## Role',
+      '',
+      slot.logicRole || '',
+      '',
+      '## Image',
+      '',
+      slot.imagePath || 'No separate image. This is a geometry/control zone.',
+      '',
+      '## Generation Notes',
+      '',
+      slot.needsBgRemoval
+        ? 'Generate as a separate transparent PNG cutout.'
+        : 'Do not generate as a separate cutout unless this element later becomes movable.',
+      ''
+    ];
+
+    await fsp.writeFile(rawPromptPath, lines.join('\n'), 'utf8');
+  }));
+}
+
 async function cleanupRequests(levelId) {
-  const entries = await fsp.readdir(REQUESTS_DIR).catch(() => []);
+  const levelRequestsDir = path.join(REQUESTS_DIR, levelId);
+  const entries = await fsp.readdir(levelRequestsDir).catch(() => []);
   await Promise.all(
     entries
       .filter((name) =>
-        (name.startsWith(`${levelId}-image-brief-`) && name.endsWith('.md')) ||
-        (name.startsWith(`${levelId}-structured-plan-`) && name.endsWith('.json')) ||
-        (name.startsWith(`${levelId}-generation-request-`) && name.endsWith('.md'))
+        (name.startsWith('image-brief-') && name.endsWith('.md')) ||
+        (name.startsWith('structured-plan-') && name.endsWith('.json')) ||
+        (name.startsWith('generation-request-') && name.endsWith('.md'))
       )
-      .map((name) => fsp.rm(path.join(REQUESTS_DIR, name), { force: true }))
+      .map((name) => fsp.rm(path.join(levelRequestsDir, name), { force: true }))
   );
 }
 
