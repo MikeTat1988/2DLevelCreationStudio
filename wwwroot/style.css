@@ -679,6 +679,63 @@ button:disabled {
   margin: 8px 0;
 }
 
+.generation-status-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin: 8px 0;
+  padding: 10px;
+  border: 1px solid rgba(88, 166, 255, .35);
+  border-radius: 8px;
+  background: #0d1726;
+}
+
+.generation-status-card strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+
+.generation-status-card small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(88, 166, 255, .25);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: spin .85s linear infinite;
+}
+
+.stage-generation-overlay {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(88, 166, 255, .38);
+  border-radius: 999px;
+  background: rgba(8, 13, 20, .88);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .brief-review-card.is-ready {
   border-color: rgba(88, 166, 255, .34);
   background: linear-gradient(180deg, #0d1726 0%, #0b1220 100%);

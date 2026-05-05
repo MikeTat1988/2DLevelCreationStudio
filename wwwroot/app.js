@@ -206,6 +206,7 @@ let activeStageDrag = false;
 let generationPanelOpen = false;
 let activeInspectorTab = 'brief';
 let isGenerating = false;
+let generationPollTimer = null;
 
 const els = {
   projectSubtitle: document.getElementById('projectSubtitle'),
@@ -633,10 +634,20 @@ function renderInspector() {
       <label class="prompt-box-label" for="generationPlanNotesInput">Optional level plan</label>
       <textarea id="generationPlanNotesInput" class="short-request-input plan-notes-input" placeholder="Optional: key puzzle, main movable prop, exit rule, mood">${escapeHtml(level.generation.planNotes)}</textarea>
       <div class="primary-action-row">
-        <button type="button" id="generateFromRequestButton" class="primary-action" ${isGenerating ? 'disabled' : ''}>${isGenerating ? 'Writing...' : hasRequest ? 'Regenerate background' : 'Generate background'}</button>
+        <button type="button" id="generateFromRequestButton" class="primary-action" ${isGenerating ? 'disabled' : ''}>${isGenerating ? 'Starting...' : hasRequest ? 'Regenerate' : 'Generate'}</button>
         <button type="button" id="openCurrentRequestButton" ${hasRequest ? '' : 'disabled'}>Open prompt</button>
       </div>
     </details>
+
+    ${requestRef.status === 'generating' ? `
+      <div class="generation-status-card">
+        <span class="spinner" aria-hidden="true"></span>
+        <div>
+          <strong>Generating image in Codex</strong>
+          <small>UI automation was sent. Studio will refresh when ${escapeHtml(level.id)}/current.png changes.</small>
+        </div>
+      </div>
+    ` : ''}
 
     <div class="level-actions-row">
       <button type="button" id="applyCodexResultButton" ${hasRequest ? '' : 'disabled'}>Refresh from files</button>
@@ -890,6 +901,8 @@ function renderLevelStage() {
   const imageLabel = imageRef
     ? imageRef.status === 'handoff_ready'
       ? 'Generation request ready for Codex'
+      : imageRef.status === 'generating'
+      ? 'Generating image in Codex'
       : imageRef.status === 'applied'
       ? 'Applied generated level image'
       : imageRef.status === 'approved'
@@ -907,6 +920,12 @@ function renderLevelStage() {
     <div class="level-object-layer">
       ${overlayObjects.map((object) => renderStageObject(level, object)).join('')}
     </div>
+    ${imageRef?.status === 'generating' ? `
+      <div class="stage-generation-overlay">
+        <span class="spinner" aria-hidden="true"></span>
+        <strong>Generating...</strong>
+      </div>
+    ` : ''}
     <div class="level-empty-state">${escapeHtml(imageRef ? imageLabel : 'Ready for objects, layers, and mechanics')}</div>
     ${revisionLabel ? `<div class="level-revision-badge">${escapeHtml(revisionLabel)}</div>` : ''}
   `;
@@ -1108,24 +1127,27 @@ async function generateDraftFromRequest() {
     const markdown = buildGenerationBriefMarkdown(level, plan);
     const planJson = buildStructuredPlanJson(level, plan, bridgePrompt);
     const result = await writeGenerationRequest(level.id, markdown, planJson);
+    const automation = await startGenerationAutomation(level.id);
     level.generation.generatedImageRef = {
-      status: 'handoff_ready',
+      status: 'generating',
       previewUrl: null,
       revision: result.revision,
       requestPath: result.requestPath,
       currentRequestPath: result.currentRequestPath,
       planPath: result.planPath,
       currentPlanPath: result.currentPlanPath,
+      automation,
       sourceRequest: request,
       generatedAt: plan.createdAt,
-      note: 'Generation request written for Codex handoff. Ask Codex to generate from the latest request.'
+      note: 'Codex UI automation was started. Studio will refresh when the output image changes.'
     };
     saveProject();
-    showStatus('Generation request ready for Codex');
+    startGenerationStatusPolling(level.id);
+    showStatus('Codex generation started');
   } catch (error) {
     level.generation.generatedImageRef = null;
     saveProject();
-    showStatus(error.message || 'Could not write generation request');
+    showStatus(error.message || 'Could not start generation');
   } finally {
     isGenerating = false;
     render();
@@ -1151,6 +1173,76 @@ async function writeGenerationRequest(levelId, markdown, planJson) {
   return payload;
 }
 
+async function startGenerationAutomation(levelId) {
+  const response = await fetch('/api/start-generation-automation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ levelId })
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `Could not start Codex UI automation (${response.status})`);
+  }
+  return payload;
+}
+
+async function readGenerationAutomationStatus(levelId) {
+  const response = await fetch(`/api/generation-automation-status?levelId=${encodeURIComponent(levelId)}`, {
+    cache: 'no-store'
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `Could not read generation automation status (${response.status})`);
+  }
+  return payload;
+}
+
+function startGenerationStatusPolling(levelId) {
+  stopGenerationStatusPolling();
+  generationPollTimer = window.setInterval(() => pollGenerationStatus(levelId), 2500);
+  pollGenerationStatus(levelId);
+}
+
+function stopGenerationStatusPolling() {
+  if (generationPollTimer) {
+    window.clearInterval(generationPollTimer);
+    generationPollTimer = null;
+  }
+}
+
+async function pollGenerationStatus(levelId) {
+  const level = project.levels.find((item) => item.id === levelId);
+  if (!level || level.generation.generatedImageRef?.status !== 'generating') {
+    stopGenerationStatusPolling();
+    return;
+  }
+
+  try {
+    const status = await readGenerationAutomationStatus(levelId);
+    level.generation.generatedImageRef.automation = status;
+    if (status.state === 'image_ready') {
+      stopGenerationStatusPolling();
+      await applyCodexResult(levelId);
+      showStatus('Generated image applied');
+      return;
+    }
+
+    if (status.state === 'tool_failed') {
+      stopGenerationStatusPolling();
+      level.generation.generatedImageRef.status = 'handoff_ready';
+      saveProject();
+      render();
+      showStatus(status.error || 'Codex UI automation failed');
+      return;
+    }
+
+    saveProject();
+  } catch (error) {
+    showStatus(error.message || 'Could not poll generation');
+  }
+}
+
 async function readCurrentGenerationResult(levelId) {
   const response = await fetch(`/api/current-generation-result?levelId=${encodeURIComponent(levelId)}`, {
     cache: 'no-store'
@@ -1162,8 +1254,8 @@ async function readCurrentGenerationResult(levelId) {
   return payload;
 }
 
-async function applyCodexResult() {
-  const level = getSelectedLevel();
+async function applyCodexResult(levelId = getSelectedLevel().id) {
+  const level = project.levels.find((item) => item.id === levelId) ?? getSelectedLevel();
   try {
     const result = await readCurrentGenerationResult(level.id);
     const planJson = JSON.parse(String(result.planJson || '').replace(/^\uFEFF/, '').trim());
@@ -1212,7 +1304,7 @@ function applyStructuredPlanToLevel(level, planJson, result) {
     sourceRequest,
     generatedAt: result.imageLastWriteTime || new Date().toISOString(),
     currentPlanPath: result.planPath,
-    currentRequestPath: level.generation.generatedImageRef?.currentRequestPath ?? `C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\${level.id}-image-brief-current.md`,
+    currentRequestPath: level.generation.generatedImageRef?.currentRequestPath ?? `C:\\Dev\\2DLevelCreationStudio\\handoff\\requests\\${level.id}\\image-brief-current.md`,
     appliedAt: new Date().toISOString(),
     note: 'Codex-generated image and structured plan are applied to the level.'
   };
@@ -1614,7 +1706,17 @@ els.levelSelect.addEventListener('change', (event) => {
 els.levelSelect.addEventListener('dblclick', renameSelectedLevel);
 
 window.rigStudioCharacterSchema = rigStudioCharacterSchema;
-loadInitialProject().then(render);
+loadInitialProject().then(() => {
+  render();
+  resumeGenerationPolling();
+});
+
+function resumeGenerationPolling() {
+  const generatingLevel = project.levels.find((level) => level.generation.generatedImageRef?.status === 'generating');
+  if (generatingLevel) {
+    startGenerationStatusPolling(generatingLevel.id);
+  }
+}
 
 function closeRenameDialog() {
   els.renameDialog.hidden = true;

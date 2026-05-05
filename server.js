@@ -11,6 +11,9 @@ const GENERATED_DIR = path.join(ROOT, 'assets', 'generated');
 const HANDOFF_DIR = path.join(__dirname, 'handoff');
 const REQUESTS_DIR = path.join(HANDOFF_DIR, 'requests');
 const RESULTS_DIR = path.join(HANDOFF_DIR, 'results');
+const AUTOMATION_PROJECT = path.join(__dirname, 'tools', 'CodexUiAutomation.Cli', 'CodexUiAutomation.Cli.csproj');
+const AUTOMATION_EXE = path.join(__dirname, 'tools', 'CodexUiAutomation.Cli', 'bin', 'Debug', 'net9.0-windows', 'CodexUiAutomation.Cli.exe');
+const CODEX_AUTOMATION_CONVERSATION = process.env.CODEX_AUTOMATION_CONVERSATION || '';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -38,6 +41,16 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && req.url.startsWith('/api/current-generation-result')) {
       await handleReadCurrentGenerationResult(req, res);
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/start-generation-automation') {
+      await handleStartGenerationAutomation(req, res);
+      return;
+    }
+
+    if (req.method === 'GET' && req.url.startsWith('/api/generation-automation-status')) {
+      await handleGenerationAutomationStatus(req, res);
       return;
     }
 
@@ -162,6 +175,116 @@ async function handleReadCurrentGenerationResult(req, res) {
   });
 }
 
+async function handleStartGenerationAutomation(req, res) {
+  const body = await readJson(req);
+  const levelId = safeName(String(body.levelId || 'level'));
+  const levelRequestsDir = path.join(REQUESTS_DIR, levelId);
+  const currentBriefPath = path.join(levelRequestsDir, 'image-brief-current.md');
+  const currentPlanPath = path.join(levelRequestsDir, 'structured-plan-current.json');
+  const outputImagePath = path.join(GENERATED_DIR, levelId, 'current.png');
+  const automationPromptPath = path.join(levelRequestsDir, 'automation-prompt-current.md');
+  const statusPath = path.join(levelRequestsDir, 'automation-status.json');
+  const logPath = path.join(levelRequestsDir, 'automation.log');
+
+  const [briefMarkdown, planJson, previousImageStat] = await Promise.all([
+    fsp.readFile(currentBriefPath, 'utf8').catch(() => null),
+    fsp.readFile(currentPlanPath, 'utf8').catch(() => null),
+    fsp.stat(outputImagePath).catch(() => null)
+  ]);
+
+  if (!briefMarkdown || !planJson) {
+    sendJson(res, 404, { error: `No current generation package found for ${levelId}.` });
+    return;
+  }
+
+  await fsp.mkdir(path.dirname(outputImagePath), { recursive: true });
+  const startedAt = new Date().toISOString();
+  const prompt = buildAutomationPrompt({
+    levelId,
+    currentBriefPath,
+    currentPlanPath,
+    outputImagePath,
+    briefMarkdown,
+    planJson
+  });
+  await fsp.writeFile(automationPromptPath, prompt, 'utf8');
+
+  const status = {
+    levelId,
+    state: 'submitted',
+    startedAt,
+    promptPath: automationPromptPath,
+    requestPath: currentBriefPath,
+    planPath: currentPlanPath,
+    outputImagePath,
+    previousImageMtimeMs: previousImageStat?.mtimeMs ?? null,
+    previousImageLastWriteTime: previousImageStat?.mtime?.toISOString() ?? null,
+    logPath
+  };
+
+  await fsp.writeFile(statusPath, JSON.stringify(status, null, 2), 'utf8');
+
+  const args = buildAutomationArgs(automationPromptPath);
+  const child = spawn(args.command, args.args, {
+    cwd: __dirname,
+    windowsHide: true,
+    stdio: 'ignore'
+  });
+
+  status.pid = child.pid ?? null;
+  await fsp.writeFile(statusPath, JSON.stringify(status, null, 2), 'utf8');
+
+  child.on('exit', async (code) => {
+    const current = await readAutomationStatus(levelId);
+    if (!current || current.state === 'image_ready') return;
+    current.toolExitCode = code;
+    current.toolExitedAt = new Date().toISOString();
+    if (code !== 0) {
+      current.state = 'tool_failed';
+      current.error = `Codex UI automation exited with code ${code}.`;
+    }
+    await fsp.writeFile(statusPath, JSON.stringify(current, null, 2), 'utf8').catch(() => {});
+  });
+  child.on('error', async (error) => {
+    const current = await readAutomationStatus(levelId);
+    if (!current || current.state === 'image_ready') return;
+    current.state = 'tool_failed';
+    current.error = error.message || 'Could not start Codex UI automation.';
+    current.toolExitedAt = new Date().toISOString();
+    await fsp.writeFile(statusPath, JSON.stringify(current, null, 2), 'utf8').catch(() => {});
+  });
+
+  sendJson(res, 200, {
+    ok: true,
+    ...status,
+    pid: child.pid ?? null,
+    command: args.display
+  });
+}
+
+async function handleGenerationAutomationStatus(req, res) {
+  const url = new URL(req.url, `http://${HOST}:${PORT}`);
+  const levelId = safeName(url.searchParams.get('levelId') || 'level');
+  const status = await readAutomationStatus(levelId);
+  if (!status) {
+    sendJson(res, 404, { error: `No automation status found for ${levelId}.` });
+    return;
+  }
+
+  const imageStat = await fsp.stat(status.outputImagePath).catch(() => null);
+  const previous = Number(status.previousImageMtimeMs ?? 0);
+  const current = Number(imageStat?.mtimeMs ?? 0);
+  if (imageStat && (!previous || current > previous + 1)) {
+    status.state = 'image_ready';
+    status.imageMtimeMs = imageStat.mtimeMs;
+    status.imageLastWriteTime = imageStat.mtime.toISOString();
+    status.imageUrl = `/assets/generated/${levelId}/current.png`;
+    await fsp.writeFile(getAutomationStatusPath(levelId), JSON.stringify(status, null, 2), 'utf8').catch(() => {});
+  }
+
+  sendJson(res, 200, status);
+}
+
 async function handleRevealPath(req, res) {
   const body = await readJson(req);
   const targetPath = path.normalize(String(body.path || ''));
@@ -229,6 +352,94 @@ async function writeElementPromptFiles(levelRequestsDir, planContent) {
 
     await fsp.writeFile(rawPromptPath, lines.join('\n'), 'utf8');
   }));
+}
+
+function buildAutomationPrompt({ levelId, currentBriefPath, currentPlanPath, outputImagePath, briefMarkdown, planJson }) {
+  return [
+    '# 2D Level Creation Studio Generation Task',
+    '',
+    'You are being invoked by the local 2D Level Creation Studio UI automation tool.',
+    'Generate the requested visual asset and save it into the exact project path below.',
+    '',
+    '## Hard Rules',
+    '',
+    '- Use exactly one image generation call for this request.',
+    '- Save exactly one project image file: overwrite the output path below.',
+    '- Do not create sibling project images such as background-clean.png, drafts, alternates, or copies.',
+    '- If the image tool saves an original in the Codex generated_images cache, leave it there, but copy only the selected final image into the project output path.',
+    '- The final project image must be a PNG at 1536x864 unless the structured plan explicitly asks for another size.',
+    '- After saving the image, do not edit source code, do not commit, and do not create extra files.',
+    '',
+    '## Output Path',
+    '',
+    '```text',
+    outputImagePath,
+    '```',
+    '',
+    '## Level Package',
+    '',
+    `Level id: ${levelId}`,
+    `User-facing brief: ${currentBriefPath}`,
+    `Structured plan: ${currentPlanPath}`,
+    '',
+    '## User-Facing Brief',
+    '',
+    briefMarkdown,
+    '',
+    '## Structured Plan JSON',
+    '',
+    '```json',
+    planJson,
+    '```',
+    '',
+    '## Required Final Response',
+    '',
+    'Reply only with: generated <output path>',
+    ''
+  ].join('\n');
+}
+
+function buildAutomationArgs(promptPath) {
+  const project = __dirname;
+  const baseArgs = [
+    'send',
+    '--project',
+    project,
+    '--prompt-file',
+    promptPath
+  ];
+  if (CODEX_AUTOMATION_CONVERSATION.trim()) {
+    baseArgs.push('--conversation', CODEX_AUTOMATION_CONVERSATION.trim());
+  }
+
+  if (fs.existsSync(AUTOMATION_EXE)) {
+    return {
+      command: AUTOMATION_EXE,
+      args: baseArgs,
+      display: AUTOMATION_EXE
+    };
+  }
+
+  return {
+    command: 'dotnet',
+    args: ['run', '--project', AUTOMATION_PROJECT, '--', ...baseArgs],
+    display: `dotnet run --project ${AUTOMATION_PROJECT}`
+  };
+}
+
+async function readAutomationStatus(levelId) {
+  const statusPath = getAutomationStatusPath(levelId);
+  const content = await fsp.readFile(statusPath, 'utf8').catch(() => null);
+  if (!content) return null;
+  try {
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
+
+function getAutomationStatusPath(levelId) {
+  return path.join(REQUESTS_DIR, levelId, 'automation-status.json');
 }
 
 async function cleanupRequests(levelId) {

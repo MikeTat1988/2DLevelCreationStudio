@@ -13,6 +13,8 @@ dist/
 build/
 .worktrees/
 worktrees/
+tools/**/bin/
+tools/**/obj/
 
 # Logs and temporary files
 *.log
