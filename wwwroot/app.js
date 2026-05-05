@@ -654,6 +654,8 @@ function renderInspector() {
       <button type="button" id="openLevelAssetsButton">Open level assets</button>
     </div>
 
+    ${renderBackgroundHistory(level)}
+
     <div class="hidden-field-store">
       <textarea id="generationSummaryInput">${escapeHtml(level.generation.summary)}</textarea>
       <textarea id="generationCompositionInput">${escapeHtml(level.generation.composition)}</textarea>
@@ -739,6 +741,30 @@ function renderLevelTree(level) {
   }));
 }
 
+function renderBackgroundHistory(level) {
+  const items = Array.isArray(level.generation.backgroundHistory)
+    ? level.generation.backgroundHistory
+    : [];
+  if (items.length === 0) return '';
+
+  return `
+    <section class="background-history-card">
+      <div class="panel-heading-row">
+        <h3>Background versions</h3>
+        <button type="button" class="help-icon" title="Generated background images are stored under this level. Pick one to make it current.">?</button>
+      </div>
+      <div class="background-history-list">
+        ${items.map((item, index) => `
+          <button type="button" class="background-version-button" data-bg-file="${escapeHtml(item.fileName)}">
+            <span>${index === 0 ? 'Latest' : `Version ${items.length - index}`}</span>
+            <small>${escapeHtml(new Date(item.lastWriteTime || item.mtimeMs || Date.now()).toLocaleString())}</small>
+          </button>
+        `).join('')}
+      </div>
+    </section>
+  `;
+}
+
 function bindInspectorControls(level) {
   document.querySelectorAll('.inspector-tabs button').forEach((button) => {
     button.addEventListener('click', () => {
@@ -775,6 +801,9 @@ function bindInspectorControls(level) {
   document.getElementById('generateFromRequestButton').addEventListener('click', generateDraftFromRequest);
   document.getElementById('openCurrentRequestButton').addEventListener('click', openCurrentRequest);
   document.getElementById('applyCodexResultButton')?.addEventListener('click', applyCodexResult);
+  document.querySelectorAll('.background-version-button').forEach((button) => {
+    button.addEventListener('click', () => selectBackgroundVersion(level.id, button.dataset.bgFile));
+  });
   document.getElementById('generationUserRequestInput').addEventListener('input', (event) => {
     const nextRequest = event.target.value;
     const previousSourceRequest = normalizeRequest(level.generation.generatedImageRef?.sourceRequest);
@@ -1243,6 +1272,24 @@ async function pollGenerationStatus(levelId) {
   }
 }
 
+async function selectBackgroundVersion(levelId, fileName) {
+  try {
+    const response = await fetch('/api/select-background', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ levelId, fileName })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `Could not select background (${response.status})`);
+    }
+    await applyCodexResult(levelId);
+    showStatus('Background version applied');
+  } catch (error) {
+    showStatus(error.message || 'Could not select background');
+  }
+}
+
 async function readCurrentGenerationResult(levelId) {
   const response = await fetch(`/api/current-generation-result?levelId=${encodeURIComponent(levelId)}`, {
     cache: 'no-store'
@@ -1282,6 +1329,9 @@ function applyStructuredPlanToLevel(level, planJson, result) {
   level.generation.gameplayPurpose = plan.gameplayPurpose || '';
   level.generation.safetyCheck = plan.safetyCheck || '';
   level.generation.assetSlots = structuredClone(assetSlots);
+  level.generation.backgroundHistory = Array.isArray(result.backgroundHistory)
+    ? result.backgroundHistory
+    : level.generation.backgroundHistory ?? [];
   level.generation.draftPlan = {
     title: plan.title || buildDisplayTitleFromRequest(sourceRequest),
     intent: plan.intent || '',

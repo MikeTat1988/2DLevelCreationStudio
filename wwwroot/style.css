@@ -702,6 +702,49 @@ button:disabled {
   font-size: 11px;
 }
 
+.background-history-card {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0b1220;
+}
+
+.background-history-list {
+  display: grid;
+  gap: 6px;
+  max-height: 145px;
+  overflow: auto;
+}
+
+.background-version-button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 8px;
+  border-color: var(--line-soft);
+  background: #080d14;
+  text-align: left;
+}
+
+.background-version-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.background-version-button small {
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
 .spinner {
   display: inline-block;
   width: 18px;

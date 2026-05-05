@@ -12,6 +12,7 @@ These rules apply to every generated level image. They stay stable and should no
 
 - Target: `1536 x 864`.
 - Aspect: `16:9`.
+- File format: PNG.
 - Camera: side-view adventure room or scene.
 - The level must remain readable at game scale.
 
@@ -62,6 +63,7 @@ The structured elements list must be richer than one generic prop. Every meaning
 - Permanent room shell stays baked into the background.
 - For every `foreground_1` or `foreground_2` movable/interactive object, generate a transparent-background PNG.
 - For the background, generate a clean background plate with the room shell, walls, floor, fixed lighting, and no duplicate movable props.
+- For background passes, keep the playable walking floor as wide as possible: about `1504px` wide, centered, with only about `16px` side margins so character animations do not clip against room edges.
 - For floor objects, separate the floor itself from movable floor props.
 - For wall objects, separate fixed wall decoration from interactive/clickable wall objects.
 

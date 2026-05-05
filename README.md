@@ -34,22 +34,33 @@ C:\Dev\2DLevelCreationStudio\handoff\requests\<level-id>\structured-plan-current
 C:\Dev\2DLevelCreationStudio\handoff\requests\<level-id>\automation-prompt-current.md
 ```
 
-6. The server starts the local UIAutomation tool in this repo:
+6. The server calls the shared UIAutomation app API:
 
-```text
-C:\Dev\2DLevelCreationStudio\tools\CodexUiAutomation.Cli\
+```powershell
+dotnet run --project "C:\Dev\Uiautomation\CodexUiAutomation.Cli\CodexUiAutomation.Cli.csproj" -- app send --app "2DLevelCreationStudio" --text "<combined prompt>"
 ```
 
-The tool sends the combined prompt to Codex UI, then immediately restores focus to the original window so the Studio stays usable.
+The Studio does not manage chats and does not pass output folders. UIAutomation opens the `C:\Dev\Uiautomation` Codex project, creates/reuses the app chat, and gives Codex this output folder:
+
+```text
+C:\Dev\Uiautomation\2DLevelCreationStudio
+```
 
 7. Studio shows a spinning `Generating image in Codex` indicator and polls:
 
 ```text
+C:\Dev\Uiautomation\2DLevelCreationStudio
+```
+
+8. When a new image appears, Studio imports it into the current level:
+
+```text
+C:\Dev\2DLevelCreationStudio\wwwroot\assets\generated\<level-id>\backgrounds\<revision>-background.png
 C:\Dev\2DLevelCreationStudio\wwwroot\assets\generated\<level-id>\current.png
 ```
 
-8. When `current.png` changes, Studio applies the image and structured plan automatically.
-9. The same contract is used for future generation stages: one request, one expected output path, one current image per level or asset.
+9. Background generations are kept under the level, and the Studio UI lets you switch previous background versions back to `current.png`. The external UIAutomation folder is treated as temporary staging and cleaned between runs.
+10. The same app-send contract is used for future generation stages: one request, one external output folder, then Studio imports the newest result into the right project location.
 
 The first pass should not create treasure chests, crates, keys, books, props, characters, or foreground clutter. It should only create the playable room shell/floor.
 
@@ -61,12 +72,14 @@ The Studio UI should stay simple: collapsible generation prompt at the top, then
 
 - Server: `C:\Dev\2DLevelCreationStudio\server.js`
 - Studio UI: `C:\Dev\2DLevelCreationStudio\wwwroot\app.js`
-- Local UIAutomation tool: `C:\Dev\2DLevelCreationStudio\tools\CodexUiAutomation.Cli\`
+- UIAutomation CLI: `C:\Dev\Uiautomation\CodexUiAutomation.Cli\CodexUiAutomation.Cli.csproj`
+- UIAutomation output folder: `C:\Dev\Uiautomation\2DLevelCreationStudio`
 - General generation rules: `C:\Dev\2DLevelCreationStudio\docs\handoff\general-image-guidelines.md`
 - Current generation brief: `C:\Dev\2DLevelCreationStudio\handoff\requests\level_1\image-brief-current.md`
 - Current structured plan: `C:\Dev\2DLevelCreationStudio\handoff\requests\level_1\structured-plan-current.json`
 - Current automation prompt: `C:\Dev\2DLevelCreationStudio\handoff\requests\level_1\automation-prompt-current.md`
 - Current generated image: `C:\Dev\2DLevelCreationStudio\wwwroot\assets\generated\level_1\current.png`
+- Background history: `C:\Dev\2DLevelCreationStudio\wwwroot\assets\generated\level_1\backgrounds\`
 - Per-element prompts: `C:\Dev\2DLevelCreationStudio\handoff\requests\level_1\elements\`
 
 ## What It Is
